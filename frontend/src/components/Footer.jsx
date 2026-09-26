@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Instagram, Facebook, Youtube, Mail, MapPin, Sprout } from "lucide-react";
+import { Instagram, Facebook, Youtube, Mail, MapPin } from "lucide-react";
 
 export default function Footer() {
   return (
@@ -7,8 +7,7 @@ export default function Footer() {
       <div className="container footer-grid">
         <div>
           <div className="footer-brand">
-            <span className="footer-brand-mark"><Sprout size={20} /></span>
-            <span className="footer-brand-copy"><strong>Market<span>Link</span></strong><small>eGreen Basket</small></span>
+            <img className="footer-brand-image" src="/marketlink-logo-2-transparent.png" alt="MarketLink — Farm Fresh Pre-Order" />
           </div>
           <p>Connecting local farmers with customers through fresh, predictable and convenient market shopping.</p>
           <div className="socials"><Instagram/><Facebook/><Youtube/></div>

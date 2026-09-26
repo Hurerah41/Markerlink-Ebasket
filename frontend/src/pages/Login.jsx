@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, Store, ArrowRight, ShieldCheck, Sprout, CheckCircle2, Sparkles, ShieldAlert } from "lucide-react";
+import { Mail, Lock, User, Store, ArrowRight, ShieldCheck, CheckCircle2, Sparkles, ShieldAlert, Hand } from "lucide-react";
 import { motion } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
 import { useStore } from "../context/StoreContext";
@@ -54,8 +54,7 @@ export default function Login() {
 
           <div className="auth-visual-content">
             <div className="auth-brand-pill">
-              <Sprout size={18} />
-              <span>MarketLink • eGreen Basket</span>
+              <img className="auth-brand-logo" src="/marketlink-logo-2-transparent.png" alt="MarketLink — Farm Fresh Pre-Order" />
             </div>
 
             <h2 className="auth-visual-heading">
@@ -89,7 +88,7 @@ export default function Login() {
           <div className="auth-card-wrapper">
             <div className="auth-header">
               <span className="eyebrow">Account Access</span>
-              <h1 className="auth-title">Welcome Back 👋</h1>
+              <h1 className="auth-title">Welcome Back <Hand size={27} aria-hidden="true" /></h1>
               <p className="auth-subtitle">
                 Sign in to manage your pre-order basket, favorites, or farm stall dashboard.
               </p>
@@ -132,21 +131,21 @@ export default function Login() {
                   className="demo-chip"
                   onClick={() => handleDemoFill("customer")}
                 >
-                  ⚡ Demo Customer
+                  <Sparkles size={14} /> Demo Customer
                 </button>
                 <button
                   type="button"
                   className="demo-chip"
                   onClick={() => handleDemoFill("farmer")}
                 >
-                  ⚡ Demo Farmer
+                  <Sparkles size={14} /> Demo Farmer
                 </button>
                 <button
                   type="button"
                   className="demo-chip"
                   onClick={() => handleDemoFill("admin")}
                 >
-                  ⚡ Demo Admin
+                  <Sparkles size={14} /> Demo Admin
                 </button>
               </div>
             </div>

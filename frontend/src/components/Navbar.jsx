@@ -1,14 +1,13 @@
-import { Link, NavLink } from "react-router-dom";
-import { ShoppingBasket, Heart, Menu, X, UserRound, Sprout, Store, ShieldCheck, ChevronRight, ClipboardList, Sun, Moon, LogIn, Bell, CheckCheck } from "lucide-react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
+import { ShoppingBasket, Heart, Menu, X, Store, ShieldCheck, ChevronRight, ClipboardList, LogIn, LogOut, Bell, CheckCheck } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
 import { getToken } from "../api/client";
 import { useStore } from "../context/StoreContext";
-import { useTheme } from "../context/ThemeContext";
 
 export default function Navbar() {
-  const { cartCount, favorites, currentUser, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead } = useStore();
-  const { isDark, toggleTheme } = useTheme();
+  const navigate = useNavigate();
+  const { cartCount, favorites, currentUser, notifications, unreadNotifications, markNotificationRead, markAllNotificationsRead, logout } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const isAuthenticated = Boolean(getToken());
@@ -24,14 +23,19 @@ export default function Navbar() {
   ] : [];
 
   const closeMobile = () => setMobileMenuOpen(false);
+  const handleLogout = async () => {
+    await logout();
+    setMobileMenuOpen(false);
+    setNotificationsOpen(false);
+    navigate("/");
+  };
 
   return (
     <header className="navbar-sticky">
       <nav className="navbar-main">
         <div className="container nav-content">
           <Link to="/" className="brand-logo" onClick={closeMobile}>
-            <div className="logo-badge"><Sprout size={22} className="logo-leaf" /></div>
-            <div className="logo-text-wrap"><div className="logo-title">Market<span>Link</span></div><span className="logo-tagline">eGreen Basket</span></div>
+            <img className="brand-logo-image" src="/marketlink-logo-2-transparent.png" alt="MarketLink — Farm Fresh Pre-Order" />
           </Link>
 
           <div className="nav-desktop-links">
@@ -61,11 +65,17 @@ export default function Navbar() {
               <Link to="/cart" className="cart-action-btn" aria-label="Basket"><div className="cart-icon-box"><ShoppingBasket size={20} /><AnimatePresence mode="wait"><motion.span key={cartCount} className="action-badge cart-badge" initial={{ scale: 0.4, y: -4 }} animate={{ scale: 1, y: 0 }}>{cartCount}</motion.span></AnimatePresence></div><span className="cart-label-text">Basket</span></Link>
             </>}
 
-            <Link to={isAuthenticated ? "/profile" : "/login"} className="user-profile-btn" title={isAuthenticated ? "Open profile" : "Sign in"}>
-              <div className="user-avatar-mini">{isAuthenticated ? <UserRound size={16} /> : <LogIn size={16} />}</div>
-              <div className="user-info-text"><span className="user-name-label">{isAuthenticated ? (currentUser.name || "Profile").split(" ")[0] : "Sign in"}</span><small className="user-role-label">{isAuthenticated ? roleLabel[currentUser.role] : "Account"}</small></div>
-            </Link>
-            <button className="theme-toggle-btn" onClick={toggleTheme} aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} title={isDark ? "Light mode" : "Dark mode"}>{isDark ? <Sun size={18} /> : <Moon size={18} />}</button>
+            {isAuthenticated ? (
+              <button type="button" className="user-profile-btn navbar-login-btn" title="Logout" onClick={handleLogout}>
+                <div className="user-avatar-mini"><LogOut size={16} /></div>
+                <div className="user-info-text"><span className="user-name-label">Logout</span></div>
+              </button>
+            ) : (
+              <Link to="/login" className="user-profile-btn navbar-login-btn" title="Login">
+                <div className="user-avatar-mini"><LogIn size={16} /></div>
+                <div className="user-info-text"><span className="user-name-label">Login</span></div>
+              </Link>
+            )}
             <button className="mobile-toggle-btn" onClick={() => setMobileMenuOpen((open) => !open)} aria-label="Toggle navigation menu">{mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}</button>
           </div>
         </div>
@@ -80,7 +90,7 @@ export default function Navbar() {
               {isCustomer && <><NavLink to="/orders" onClick={closeMobile} className="mobile-nav-item"><span>My Orders</span><ChevronRight size={16} /></NavLink><NavLink to="/favorites" onClick={closeMobile} className="mobile-nav-item"><span>My Favorites ({favorites.length})</span><ChevronRight size={16} /></NavLink><NavLink to="/cart" onClick={closeMobile} className="mobile-nav-item"><span>Basket ({cartCount})</span><ChevronRight size={16} /></NavLink></>}
               {isAuthenticated && <NavLink to="/profile" onClick={closeMobile} className="mobile-nav-item"><span>Profile & Settings</span><ChevronRight size={16} /></NavLink>}
             </div>
-            <div className="mobile-drawer-footer"><span className="role-toggle-mobile">{isAuthenticated ? `Signed in as ${roleLabel[currentUser.role]}` : "Welcome to MarketLink"}</span><div className="mobile-auth-row">{isAuthenticated ? <Link to="/profile" className="btn-outline" onClick={closeMobile}>Profile</Link> : <Link to="/login" className="btn-outline" onClick={closeMobile}>Sign In</Link>}<Link to="/register" className="btn-solid" onClick={closeMobile}>Register</Link><button className="btn-outline" onClick={() => { toggleTheme(); closeMobile(); }}>{isDark ? "Light mode" : "Dark mode"}</button></div></div>
+            <div className="mobile-drawer-footer"><span className="role-toggle-mobile">{isAuthenticated ? `Signed in as ${roleLabel[currentUser.role]}` : "Welcome to MarketLink"}</span><div className="mobile-auth-row">{isAuthenticated ? <button type="button" className="btn-outline" onClick={handleLogout}><LogOut size={16} /> Logout</button> : <><Link to="/login" className="btn-outline" onClick={closeMobile}>Sign In</Link><Link to="/register" className="btn-solid" onClick={closeMobile}>Register</Link></>}</div></div>
           </div>
         </motion.div>}
       </AnimatePresence>

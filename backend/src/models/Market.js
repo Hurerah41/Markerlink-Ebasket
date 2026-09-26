@@ -76,6 +76,11 @@ const marketSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, 'Description cannot exceed 500 characters'],
     },
+    imageUrl: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Market image URL cannot exceed 2000 characters'],
+    },
     isActive: {
       type: Boolean,
       default: true,

@@ -4,6 +4,8 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Favorite = require('../models/Favorite');
+const fs = require('fs/promises');
+const path = require('path');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -23,6 +25,14 @@ const pick = (source, fields) =>
     if (source[field] !== undefined) result[field] = source[field];
     return result;
   }, {});
+
+const removeStoredMarketImage = async (imageUrl) => {
+  if (!String(imageUrl || '').startsWith('/uploads/markets/')) return;
+  const filePath = path.resolve(__dirname, '../../uploads/markets', path.basename(imageUrl));
+  await fs.unlink(filePath).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+};
 
 const listFarmers = asyncHandler(async (req, res) => {
   const filter = { role: 'farmer' };
@@ -75,8 +85,8 @@ const createCustomer = asyncHandler(async (req, res) => {
     const market = await Market.findOne({ _id: preferredMarket, isActive: true }).select('_id');
     if (!market) throw new AppError('Preferred market is not available', 400);
   }
-  const customer = await User.create({ name, email, password, phone, address, preferredMarket, role: 'customer', accountStatus: 'active' });
-  const safeCustomer = await User.findById(customer._id).select('-password -tokenVersion').populate('preferredMarket', 'name address');
+  const customer = await User.create({ name, email, password, phone, address, preferredMarket, preferredMarkets: preferredMarket ? [preferredMarket] : [], role: 'customer', accountStatus: 'active' });
+  const safeCustomer = await User.findById(customer._id).select('-password -tokenVersion').populate(['preferredMarket', 'preferredMarkets']);
   res.status(201).json({ success: true, message: 'Customer created', data: { customer: safeCustomer } });
 });
 
@@ -88,10 +98,14 @@ const updateCustomer = asyncHandler(async (req, res) => {
     const market = await Market.findOne({ _id: updates.preferredMarket, isActive: true }).select('_id');
     if (!market) throw new AppError('Preferred market is not available', 400);
   }
+  if (updates.preferredMarket !== undefined) updates.preferredMarkets = updates.preferredMarket ? [updates.preferredMarket] : [];
   if (updates.email) updates.email = updates.email.trim().toLowerCase();
   const customer = await User.findOneAndUpdate({ _id: req.params.id, role: 'customer' }, updates, { new: true, runValidators: true })
     .select('-password -tokenVersion')
-    .populate('preferredMarket', 'name address');
+    .populate([
+      { path: 'preferredMarket', select: 'name address' },
+      { path: 'preferredMarkets', select: 'name address' },
+    ]);
   if (!customer) throw new AppError('Customer not found', 404);
   res.status(200).json({ success: true, message: 'Customer updated', data: { customer } });
 });
@@ -131,7 +145,7 @@ const removeReview = asyncHandler(async (req, res) => {
 });
 
 const updateFarmer = asyncHandler(async (req, res) => {
-  const updates = pick(req.body, ['name', 'email', 'farmName', 'phone', 'address', 'location', 'operatingDays', 'pickupStartTime', 'pickupEndTime', 'coordinates']);
+  const updates = pick(req.body, ['name', 'email', 'farmName', 'imageUrl', 'phone', 'address', 'location', 'operatingDays', 'pickupStartTime', 'pickupEndTime', 'coordinates']);
   if (updates.email) updates.email = updates.email.trim().toLowerCase();
   const farmer = await User.findOneAndUpdate({ _id: req.params.id, role: 'farmer' }, updates, { new: true, runValidators: true })
     .populate('preferredMarket', 'name address');
@@ -234,6 +248,27 @@ const updateMarket = asyncHandler(async (req, res) => {
   });
 });
 
+const uploadMarketImage = asyncHandler(async (req, res) => {
+  if (!req.file) throw new AppError('Choose a market image to upload', 400);
+  const market = await Market.findById(req.params.id);
+  if (!market) throw new AppError('Market not found', 404);
+  const previousImage = market.imageUrl;
+  market.imageUrl = `/uploads/markets/${req.file.filename}`;
+  await market.save();
+  await removeStoredMarketImage(previousImage);
+  res.status(200).json({ success: true, message: 'Market image uploaded successfully', data: { market } });
+});
+
+const deleteMarketImage = asyncHandler(async (req, res) => {
+  const market = await Market.findById(req.params.id);
+  if (!market) throw new AppError('Market not found', 404);
+  const previousImage = market.imageUrl;
+  market.imageUrl = undefined;
+  await market.save();
+  await removeStoredMarketImage(previousImage);
+  res.status(200).json({ success: true, message: 'Market image removed', data: { market } });
+});
+
 module.exports = {
   listFarmers,
   listCustomers,
@@ -247,6 +282,8 @@ module.exports = {
   updateFarmerStatus,
   createMarket,
   updateMarket,
+  uploadMarketImage,
+  deleteMarketImage,
   deleteMarket,
   listOrders,
   getReport,

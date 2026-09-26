@@ -21,13 +21,18 @@ import {
   AlertCircle,
   Eye,
   Check,
-  CalendarDays
+  CalendarDays,
+  Phone,
+  Ticket,
+  Hand,
+  Upload
 } from "lucide-react";
 import { motion } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
 import ProductForm from "../components/ProductForm";
 import { Badge, Modal } from "../components/ui";
 import { useStore } from "../context/StoreContext";
+import { resolveMediaUrl } from "../api/client";
 
 export default function FarmerDashboard() {
   const [searchParams] = useSearchParams();
@@ -42,6 +47,8 @@ export default function FarmerDashboard() {
     updateOrderStatus,
     currentUser,
     updateProfile,
+    uploadProfileImage,
+    removeProfileImage,
     getFarmerReviews,
     respondToReview,
     refreshFarmerProducts,
@@ -55,6 +62,8 @@ export default function FarmerDashboard() {
   // Profile edit state
   const [farmName, setFarmName] = useState("");
   const [ownerName, setOwnerName] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
   const [marketLocation, setMarketLocation] = useState("");
   const [daysSchedule, setDaysSchedule] = useState("");
   const [pickupStartTime, setPickupStartTime] = useState("08:00");
@@ -72,6 +81,7 @@ export default function FarmerDashboard() {
     if (farmerId) getFarmerReviews(farmerId).then(setFarmerReviews).catch((error) => notify("Could not load reviews", error.message));
     setFarmName(currentUser.farmName || currentUser.name || "");
     setOwnerName(currentUser.name || "");
+    setProfileImage(currentUser.imageUrl || "");
     setMarketLocation(currentUser.location || "");
     const days = (currentUser.operatingDays || []).join(", ");
     setDaysSchedule(days);
@@ -134,6 +144,34 @@ export default function FarmerDashboard() {
     } catch (error) { notify("Could not save profile", error.message); }
   };
 
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) return notify("Image is too large", "Choose an image smaller than 3 MB");
+    try {
+      setImageUploading(true);
+      const user = await uploadProfileImage(file);
+      setProfileImage(user.imageUrl || "");
+    } catch (error) {
+      notify("Could not upload image", error.message);
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
+  const handleImageRemove = async () => {
+    try {
+      setImageUploading(true);
+      const user = await removeProfileImage();
+      setProfileImage(user.imageUrl || "");
+    } catch (error) {
+      notify("Could not remove image", error.message);
+    } finally {
+      setImageUploading(false);
+    }
+  };
+
   const handleRespond = async (reviewId) => {
     try {
       const updated = await respondToReview(reviewId, responseDrafts[reviewId] || "");
@@ -150,10 +188,12 @@ export default function FarmerDashboard() {
           {/* SIDEBAR NAVIGATION */}
           <aside className="farmer-sidebar">
             <div className="farmer-profile-summary">
-              <div className="farmer-avatar-badge">GV</div>
+              <div className={`farmer-avatar-badge ${profileImage ? "has-photo" : ""}`}>
+                {profileImage ? <img src={resolveMediaUrl(profileImage)} alt={`${farmName} profile`} onError={() => setProfileImage("")} /> : <User size={21} aria-hidden="true" />}
+              </div>
               <div className="farmer-title-box">
                 <strong>{farmName}</strong>
-                <span className="stall-location-text">📍 {marketLocation}</span>
+                <span className="stall-location-text"><MapPin size={14} /> {marketLocation}</span>
                 <span className="role-chip">Verified Farm Producer</span>
               </div>
             </div>
@@ -242,7 +282,7 @@ export default function FarmerDashboard() {
                 <div className="dash-top-header">
                   <div>
                     <span className="eyebrow">Farmer Portal Overview</span>
-                    <h1 className="dash-title">Welcome Back, {ownerName.split(" ")[0]} 👋</h1>
+                    <h1 className="dash-title">Welcome Back, {ownerName.split(" ")[0]} <Hand size={25} aria-hidden="true" /></h1>
                     <p className="dash-subtitle">Here is your weekly harvest pre-orders and inventory status.</p>
                   </div>
                   <button className="btn-primary" onClick={() => setActiveTab("add-product")}>
@@ -491,7 +531,7 @@ export default function FarmerDashboard() {
                         <div>
                           <span className="f-order-num">Order #{ord.id}</span>
                           <strong className="f-customer-name">{ord.customerName}</strong>
-                          <small className="f-phone">📞 {ord.phone}</small>
+                          <small className="f-phone"><Phone size={13} /> {ord.phone}</small>
                         </div>
                         <div className="f-order-total-block">
                           <span className="f-total-amt">Rs. {ord.total}</span>
@@ -511,9 +551,9 @@ export default function FarmerDashboard() {
                         </div>
 
                         <div className="f-pickup-meta">
-                          <span>📍 Market: {ord.market}</span>
-                          <span>🕒 Slot: {ord.pickupSlot}</span>
-                          <span>🎫 Token: <strong>{ord.pickupToken}</strong></span>
+                          <span><MapPin size={13} /> Market: {ord.market}</span>
+                          <span><Clock size={13} /> Slot: {ord.pickupSlot}</span>
+                          <span><Ticket size={13} /> Token: <strong>{ord.pickupToken}</strong></span>
                         </div>
                       </div>
 
@@ -624,6 +664,24 @@ export default function FarmerDashboard() {
                   )}
 
                   <form onSubmit={handleSaveProfile} className="profile-edit-form">
+                    <div className="farmer-image-editor">
+                      <div className={`farmer-image-preview ${profileImage ? "has-photo" : ""}`}>
+                        {profileImage ? <img src={resolveMediaUrl(profileImage)} alt="Farmer profile preview" onError={() => setProfileImage("")} /> : <><User size={34} aria-hidden="true" /><span>No profile photo added</span></>}
+                      </div>
+                      <div className="form-field-group farmer-image-upload-field">
+                        <label htmlFor="farmer-profile-image"><Upload size={15} /> Upload profile image</label>
+                        <input
+                          id="farmer-profile-image"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleImageUpload}
+                          disabled={imageUploading}
+                        />
+                        <small>JPG, PNG, or WebP. Maximum file size: 3 MB.</small>
+                        {imageUploading && <span className="image-upload-status" role="status">Uploading image…</span>}
+                        {profileImage && !imageUploading && <button className="btn-text-danger remove-profile-image" type="button" onClick={handleImageRemove}><Trash2 size={14} /> Remove image</button>}
+                      </div>
+                    </div>
                     <div className="form-two-cols">
                       <div className="form-field-group">
                         <label>Farm / Stall Name</label>

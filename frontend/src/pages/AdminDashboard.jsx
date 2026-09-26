@@ -17,7 +17,8 @@ import {
   AlertTriangle,
   LocateFixed,
   ChevronRight,
-  Megaphone
+  Megaphone,
+  Upload
 } from "lucide-react";
 import AnimatedPage from "../components/AnimatedPage";
 import { Badge } from "../components/ui";
@@ -41,7 +42,7 @@ const normalizeAdminCustomer = (customer) => ({
 });
 
 export default function AdminDashboard() {
-  const { farmers, markets, orders, reviews, products, currentUser, adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminDeleteMarket, adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview, notify } = useStore();
+  const { farmers, markets, orders, reviews, products, currentUser, adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminUploadMarketImage, adminRemoveMarketImage, adminDeleteMarket, adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview, notify } = useStore();
   const [activeTab, setActiveTab] = useState("dashboard"); // dashboard, farmers, customers, markets, orders, moderation
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -75,6 +76,8 @@ export default function AdminDashboard() {
 
   const [marketForm, setMarketForm] = useState(null);
   const [editingMarketId, setEditingMarketId] = useState(null);
+  const [marketImageFile, setMarketImageFile] = useState(null);
+  const [marketImagePreview, setMarketImagePreview] = useState("");
 
   const totalRevenue = Number(report?.revenue ?? orders.reduce((sum, o) => sum + o.total, 0));
   const pendingOrdersCount = orders.filter((o) => o.status === "Placed" || o.status === "Accepted").length;
@@ -145,7 +148,7 @@ export default function AdminDashboard() {
   };
 
   /* ---------------- MARKETS ---------------- */
-  const openAddMarket = () => { setEditingMarketId(null); setMarketForm(emptyMarketForm); };
+  const openAddMarket = () => { setEditingMarketId(null); setMarketForm({ ...emptyMarketForm, removeImage: false }); setMarketImageFile(null); setMarketImagePreview(""); };
   const openEditMarket = (m) => {
     setEditingMarketId(m.id);
     setMarketForm({
@@ -153,9 +156,23 @@ export default function AdminDashboard() {
       operatingDays: m.operatingDays, farmers: String(m.farmers), landmark: m.landmark,
       latitude: String(m.coordinates?.latitude ?? m.location?.coordinates?.[1] ?? ""),
       longitude: String(m.coordinates?.longitude ?? m.location?.coordinates?.[0] ?? ""),
+      removeImage: false,
     });
+    setMarketImageFile(null);
+    setMarketImagePreview(m.imageUrl ? m.image : "");
   };
-  const closeMarketForm = () => { setMarketForm(null); setEditingMarketId(null); };
+  const closeMarketForm = () => { setMarketForm(null); setEditingMarketId(null); setMarketImageFile(null); setMarketImagePreview(""); };
+  const chooseMarketImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      event.target.value = "";
+      return notify("Image is too large", "Choose a market image smaller than 3 MB", "error");
+    }
+    setMarketImageFile(file);
+    setMarketImagePreview(URL.createObjectURL(file));
+    setMarketForm((current) => ({ ...current, removeImage: false }));
+  };
   const useCurrentLocation = () => {
     if (!navigator.geolocation) return notify("Location unavailable", "Enter latitude and longitude manually", "error");
     navigator.geolocation.getCurrentPosition(
@@ -192,13 +209,27 @@ export default function AdminDashboard() {
       description: marketForm.landmark || "MarketLink community pickup market",
       isActive: true,
     };
+    const wasEditing = Boolean(editingMarketId);
+    let saved;
     try {
-      const saved = editingMarketId ? await adminUpdateMarket(editingMarketId, payload) : await adminCreateMarket(payload);
-      setMarketList((prev) => editingMarketId ? prev.map((item) => item.id === editingMarketId ? saved : item) : [saved, ...prev]);
-      notify("Market saved", "The backend market record was updated");
-      closeMarketForm();
+      saved = wasEditing ? await adminUpdateMarket(editingMarketId, payload) : await adminCreateMarket(payload);
+      setMarketList((previous) => previous.some((item) => item.id === saved.id)
+        ? previous.map((item) => item.id === saved.id ? saved : item)
+        : [saved, ...previous]);
     } catch (error) {
       notify("Could not save market", error.message);
+      return;
+    }
+
+    try {
+      if (marketImageFile) saved = await adminUploadMarketImage(saved.id, marketImageFile);
+      else if (wasEditing && marketForm.removeImage) saved = await adminRemoveMarketImage(saved.id);
+      setMarketList((previous) => previous.map((item) => item.id === saved.id ? saved : item));
+      notify("Market saved", marketImageFile ? "Market details and image were uploaded" : "The backend market record was updated");
+      closeMarketForm();
+    } catch (error) {
+      setEditingMarketId(saved.id);
+      notify("Market saved, but image upload failed", `${error.message}. Try selecting the image again.`, "error");
     }
   };
   const deleteMarket = async (id) => {
@@ -237,7 +268,7 @@ export default function AdminDashboard() {
               <div className="farmer-avatar-badge">AD</div>
               <div className="farmer-title-box">
                 <strong>{currentUser.name}</strong>
-                <span className="stall-location-text">📍 MarketLink HQ</span>
+                <span className="stall-location-text"><MapPin size={14} /> MarketLink HQ</span>
                 <span className="role-chip">Platform Administrator</span>
               </div>
             </div>
@@ -302,7 +333,7 @@ export default function AdminDashboard() {
                 <div className="dash-top-header">
                   <div>
                     <span className="eyebrow">Admin Panel Overview</span>
-                    <h1 className="dash-title">Welcome, {currentUser.name.split(" ")[0]} 🛡️</h1>
+                    <h1 className="dash-title">Welcome, {currentUser.name.split(" ")[0]} <ShieldCheck size={25} aria-hidden="true" /></h1>
                     <p className="dash-subtitle">Platform-wide snapshot of farmers, customers, markets and orders.</p>
                   </div>
                 </div>
@@ -640,6 +671,17 @@ export default function AdminDashboard() {
                       <button className="link-btn-small" onClick={closeMarketForm}><X size={14} /> Cancel</button>
                     </div>
                     <form onSubmit={saveMarket} className="profile-edit-form">
+                      <div className="market-image-editor">
+                        <div className="market-image-admin-preview">
+                          {marketImagePreview ? <img src={marketImagePreview} alt="Market preview" /> : <><Store size={34} /><span>No market image added</span></>}
+                        </div>
+                        <div className="form-field-group farmer-image-upload-field">
+                          <label htmlFor="admin-market-image"><Upload size={15} /> Market image</label>
+                          <input id="admin-market-image" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseMarketImage} />
+                          <small>Upload a JPG, PNG, or WebP image up to 3 MB.</small>
+                          {marketImagePreview && <button className="remove-profile-image" type="button" onClick={() => { setMarketImageFile(null); setMarketImagePreview(""); setMarketForm((current) => ({ ...current, removeImage: true })); }}><Trash2 size={14} /> Remove image</button>}
+                        </div>
+                      </div>
                       <div className="form-two-cols">
                         <div className="form-field-group">
                           <label>Market Name</label>
@@ -670,8 +712,8 @@ export default function AdminDashboard() {
                           <input type="text" value={marketForm.landmark} onChange={(e) => setMarketForm({ ...marketForm, landmark: e.target.value })} placeholder="Near Expo Center gate 2" />
                         </div>
                         <div className="form-field-group">
-                          <label>Number of Farmers</label>
-                          <input type="number" min="0" value={marketForm.farmers} onChange={(e) => setMarketForm({ ...marketForm, farmers: e.target.value })} />
+                          <label>Active Stalls (Automatic)</label>
+                          <input type="number" value={marketForm.farmers} readOnly aria-readonly="true" />
                         </div>
                       </div>
                       <div className="market-location-picker">

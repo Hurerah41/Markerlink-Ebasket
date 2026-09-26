@@ -1,3 +1,5 @@
+import { resolveMediaUrl } from "./client";
+
 const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?auto=format&fit=crop&w=900&q=80";
 
 export function entityId(value) {
@@ -8,7 +10,9 @@ export function entityId(value) {
 export function normalizeProduct(product) {
   const farmer = product.farmer && typeof product.farmer === "object" ? product.farmer : null;
   const market = product.market && typeof product.market === "object" ? product.market : null;
-  const image = product.imageUrl || FALLBACK_IMAGE;
+  const image = product.imageUrl?.startsWith('/uploads/')
+    ? resolveMediaUrl(product.imageUrl)
+    : product.imageUrl || FALLBACK_IMAGE;
   return {
     ...product,
     id: product._id || product.id,
@@ -37,7 +41,7 @@ export function normalizeFarmer(farmer) {
     rating: Number(farmer.rating ?? 0),
     reviewsCount: Number(farmer.reviewsCount ?? 0),
     productsCount: Number(farmer.productsCount ?? 0),
-    image: farmer.image || FALLBACK_IMAGE,
+    image: resolveMediaUrl(farmer.imageUrl || farmer.image || ""),
     bio: farmer.bio || "A local producer on MarketLink.",
     days: farmer.days || (farmer.operatingDays || []).map((day) => day[0].toUpperCase() + day.slice(1)).join(", ") || "Market schedule varies",
     pickupHours: farmer.pickupHours || (farmer.pickupStartTime && farmer.pickupEndTime ? `${farmer.pickupStartTime} – ${farmer.pickupEndTime}` : "See market details"),
@@ -57,10 +61,13 @@ export function normalizeMarket(market) {
     operatingDays: days.join(", ") || "Schedule varies",
     landmark: market.address || "",
     farmers: Number(market.farmers ?? 0),
+    productsCount: Number(market.productsCount ?? 0),
+    rating: Number(market.rating ?? 0),
+    reviewsCount: Number(market.reviewsCount ?? 0),
     coordinates: { longitude, latitude },
     coords: { x: Math.min(92, Math.max(8, 50 + (longitude - 67.05) * 200)), y: Math.min(90, Math.max(10, 50 - (latitude - 24.85) * 200)) },
     features: ["Fresh local produce", "Direct farmer pickup"],
-    image: market.image || FALLBACK_IMAGE,
+    image: resolveMediaUrl(market.imageUrl || market.image || "") || FALLBACK_IMAGE,
   };
 }
 

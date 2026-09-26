@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { PackageCheck, Clock3, CheckCircle2, CircleDot, ChevronDown, ChevronUp, MapPin, QrCode, ShoppingBag, ArrowRight, ShieldCheck, Phone } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
+import PickupRouteDetails from "../components/PickupRouteDetails";
 import { useStore } from "../context/StoreContext";
 
 // SRS Spec: Placed -> Accepted -> Ready for Pickup -> Completed
@@ -235,6 +236,8 @@ export default function Orders() {
                             </div>
                           ))}
                         </div>
+
+                        <PickupRouteDetails market={{ ...order.marketObject, name: order.market }} address={currentUser.address} />
 
                         <div className="breakdown-footer">
                           <div className="payment-note">

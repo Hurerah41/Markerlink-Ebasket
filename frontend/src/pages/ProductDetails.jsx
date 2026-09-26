@@ -1,5 +1,5 @@
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Heart, MapPin, Plus, Minus, ShoppingCart, Star, ShieldCheck, Sparkles, Store, Check, MessageSquarePlus } from "lucide-react";
+import { ArrowLeft, ArrowRight, Heart, MapPin, Plus, Minus, ShoppingCart, Star, ShieldCheck, Sparkles, Check, MessageSquarePlus, Leaf, UserRound, X, Send } from "lucide-react";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
@@ -41,6 +41,7 @@ export default function ProductDetails() {
   const productReviews = reviews.filter((r) => String(r.productId) === String(product.id));
   const displayRating = productReviews.length ? productReviews.reduce((sum, review) => sum + review.rating, 0) / productReviews.length : 0;
   const galleryImages = product.images && product.images.length > 0 ? product.images : [product.image];
+  const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
 
   const handleAddToCart = () => {
     if (product.stock <= 0) return;
@@ -95,8 +96,8 @@ export default function ProductDetails() {
                   <Heart size={22} fill={liked ? "#e11d48" : "none"} color={liked ? "#e11d48" : "#374151"} />
                 </button>
                 <div className="gallery-badge-row">
-                  {product.organic && <span className="organic-badge">🌱 100% Organic</span>}
-                  <span className="harvest-badge">✨ {product.harvestTime || "Harvested Today"}</span>
+                  {product.organic && <span className="organic-badge"><Leaf size={14} /> 100% Organic</span>}
+                  <span className="harvest-badge"><Sparkles size={14} /> {product.harvestTime || "Harvested Today"}</span>
                 </div>
               </motion.div>
 
@@ -119,7 +120,7 @@ export default function ProductDetails() {
             <div className="product-info-side">
               <div className="meta-badge-row">
                 <span className="category-pill">{product.category}</span>
-                <span className="market-pill">📍 {product.market}</span>
+                <span className="market-pill"><MapPin size={13} /> {product.market}</span>
               </div>
 
               <h1 className="detail-product-title">{product.name}</h1>
@@ -158,11 +159,11 @@ export default function ProductDetails() {
 
               {/* SRS Farmer Information Specification */}
               <div className="farmer-info-card">
-                <div className="farmer-avatar-box">👨‍🌾</div>
+                <div className="farmer-avatar-box"><UserRound size={24} aria-hidden="true" /></div>
                 <div className="farmer-meta-box">
                   <span className="farmer-label">Local Producer / Stall</span>
                   <Link to="/farmers" className="farmer-stall-name">
-                    {product.farmer} ➔
+                    {product.farmer} <ArrowRight size={14} />
                   </Link>
                   <small className="farmer-pickup-note">
                     Pickup stall located at {product.market || "Local Market"}. Hand-packaged upon arrival.
@@ -243,7 +244,7 @@ export default function ProductDetails() {
                 <span className="eyebrow">Customer Feedback</span>
                 <h2 className="reviews-title">Customer Reviews & Ratings</h2>
                 <div className="average-rating-badge">
-                  {productReviews.length ? <>⭐ <strong>{displayRating.toFixed(1)}</strong> out of 5 ({productReviews.length} ratings)</> : <strong>No ratings yet</strong>}
+                  {productReviews.length ? <><Star size={16} fill="currentColor" /> <strong>{displayRating.toFixed(1)}</strong> out of 5 ({productReviews.length} ratings)</> : <strong>No ratings yet</strong>}
                 </div>
               </div>
 
@@ -263,8 +264,10 @@ export default function ProductDetails() {
                         <span className="rev-date">{rev.date}</span>
                       </div>
                     </div>
-                    <div className="rev-stars">
-                      {"★".repeat(Math.round(rev.rating))}
+                    <div className="rev-stars" aria-label={`${rev.rating} out of 5 stars`}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Star key={star} size={15} fill={star <= Math.round(rev.rating) ? "currentColor" : "none"} />
+                      ))}
                     </div>
                   </div>
                   <p className="rev-body">"{rev.comment}"</p>
@@ -291,23 +294,37 @@ export default function ProductDetails() {
         {showReviewModal && (
           <div className="modal-backdrop" onClick={() => setShowReviewModal(false)}>
             <motion.div
-              className="modal-box"
+              className="modal-box review-modal-box"
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
             >
               <div className="modal-header">
-                <div>
-                  <span className="eyebrow">Rate & Review</span>
-                  <h3>Write a Review for {product.name}</h3>
+                <div className="review-modal-heading">
+                  <span className="review-heading-icon"><MessageSquarePlus size={20} /></span>
+                  <div>
+                    <span className="eyebrow">Rate & Review</span>
+                    <h3>Share your harvest experience</h3>
+                  </div>
                 </div>
-                <button className="modal-close" onClick={() => setShowReviewModal(false)}>✕</button>
+                <button className="modal-close" aria-label="Close review form" onClick={() => setShowReviewModal(false)}><X size={18} /></button>
               </div>
 
               <form onSubmit={handleReviewSubmit} className="review-form">
+                <div className="review-product-summary">
+                  <img src={product.image} alt="" />
+                  <div>
+                    <strong>{product.name}</strong>
+                    <span>{product.farmer} · {product.market}</span>
+                  </div>
+                </div>
+
                 <div className="rating-select-group">
-                  <label>Your Rating</label>
+                  <div className="rating-question-row">
+                    <label>How was the product?</label>
+                    <strong>{ratingLabels[newRating]}</strong>
+                  </div>
                   <div className="star-picker">
                     {[1, 2, 3, 4, 5].map((star) => (
                       <button
@@ -315,32 +332,39 @@ export default function ProductDetails() {
                         key={star}
                         className={`star-choice ${newRating >= star ? "active" : ""}`}
                         onClick={() => setNewRating(star)}
+                        aria-label={`Rate ${star} out of 5 stars`}
+                        aria-pressed={newRating === star}
                       >
-                        ★
+                        <Star size={25} fill={newRating >= star ? "currentColor" : "none"} />
                       </button>
                     ))}
-                    <span className="rating-text-label">{newRating} Stars</span>
+                    <span className="rating-text-label">{newRating}/5</span>
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label htmlFor="rev-text">Your Review & Quality Experience</label>
+                <div className="form-group review-comment-field">
+                  <div className="review-field-label">
+                    <label htmlFor="rev-text">Tell other customers about it</label>
+                    <span>{newComment.length}/1000</span>
+                  </div>
                   <textarea
                     id="rev-text"
-                    rows={4}
+                    rows={5}
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
                     placeholder="Describe the freshness, taste, and pickup experience..."
+                    maxLength={1000}
                     required
                   />
+                  <small><ShieldCheck size={14} /> Reviews are available to customers with completed orders.</small>
                 </div>
 
                 <div className="modal-actions">
                   <button type="button" className="btn-secondary" onClick={() => setShowReviewModal(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="btn-primary">
-                    Submit Review
+                  <button type="submit" className="btn-primary" disabled={!newComment.trim()}>
+                    <Send size={16} /> Submit Review
                   </button>
                 </div>
               </form>

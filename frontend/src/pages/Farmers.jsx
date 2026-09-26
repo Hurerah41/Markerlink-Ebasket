@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { MapPin, Star, ArrowRight, Clock, Sprout, Store, Heart, Check, ShoppingCart, X, Phone, Mail, Award, ShieldCheck } from "lucide-react";
+import { MapPin, Star, ArrowRight, Clock, Sprout, Store, Heart, Check, ShoppingCart, X, Phone, Mail, Award, ShieldCheck, Carrot, UserRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
 import { useStore } from "../context/StoreContext";
@@ -45,7 +45,8 @@ export default function Farmers() {
                   key={farmer.id}
                 >
                   <div className="farmer-card-header">
-                    <img src={farmer.image} alt={farmer.name} className="farmer-cover-img" />
+                    <div className="farmer-image-placeholder"><UserRound size={40} /><span>Photo not added</span></div>
+                    {farmer.image && <img src={farmer.image} alt={farmer.name} className="farmer-cover-img" onError={(event) => event.currentTarget.remove()} />}
                     <button
                       className={`farmer-fav-btn ${isFav ? "active" : ""}`}
                       onClick={() => toggleFavoriteFarmer(farmer)}
@@ -74,7 +75,7 @@ export default function Farmers() {
                         <span>{farmer.days}</span>
                       </div>
                       <div className="detail-line">
-                        <span className="carrot-emoji">🥕</span>
+                        <span className="carrot-emoji"><Carrot size={18} aria-hidden="true" /></span>
                         <span>{farmer.productsCount} Products</span>
                       </div>
                     </div>
@@ -111,7 +112,8 @@ export default function Farmers() {
               </button>
 
               <div className="profile-banner-top">
-                <img src={selectedFarmer.image} alt={selectedFarmer.name} className="profile-hero-image" />
+                <div className="farmer-image-placeholder profile-image-placeholder"><UserRound size={46} /><span>Photo not added</span></div>
+                {selectedFarmer.image && <img src={selectedFarmer.image} alt={selectedFarmer.name} className="profile-hero-image" onError={(event) => event.currentTarget.remove()} />}
                 <div className="profile-hero-badge">
                   <Award size={16} /> {selectedFarmer.experience}
                 </div>
@@ -169,8 +171,17 @@ export default function Farmers() {
                   <h4>About The Farm</h4>
                   <p>{selectedFarmer.bio}</p>
                   <div className="farmer-contact-pills">
-                    <span><Phone size={14} /> {selectedFarmer.phone}</span>
-                    <span><Mail size={14} /> {selectedFarmer.email}</span>
+                    {selectedFarmer.phone && (
+                      <a href={`tel:${selectedFarmer.phone}`} aria-label={`Call ${selectedFarmer.name}`}>
+                        <Phone size={14} /> {selectedFarmer.phone}
+                      </a>
+                    )}
+                    {selectedFarmer.email && (
+                      <a href={`mailto:${selectedFarmer.email}`} aria-label={`Email ${selectedFarmer.name}`}>
+                        <Mail size={14} /> {selectedFarmer.email}
+                      </a>
+                    )}
+                    {!selectedFarmer.phone && !selectedFarmer.email && <span>Contact details are not available yet.</span>}
                   </div>
                 </div>
 

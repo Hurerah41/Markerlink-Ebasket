@@ -3,8 +3,9 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
+const Order = require('../models/Order');
 
-const publicFields = 'name farmName location bio operatingDays pickupStartTime pickupEndTime orderCutoffTime pickupSlotMinutes coordinates markets preferredMarket createdAt';
+const publicFields = 'name farmName imageUrl email phone location bio operatingDays pickupStartTime pickupEndTime orderCutoffTime pickupSlotMinutes coordinates markets preferredMarket createdAt';
 
 const getFarmers = asyncHandler(async (req, res) => {
   const filter = { role: 'farmer', accountStatus: 'active' };
@@ -17,9 +18,13 @@ const getFarmers = asyncHandler(async (req, res) => {
 
   const farmers = await User.find(filter).select(publicFields).populate('markets preferredMarket', 'name address marketDays openingTime closingTime location').sort({ farmName: 1 }).lean();
   const ids = farmers.map((farmer) => farmer._id);
-  const [reviewStats, productStats] = await Promise.all([
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+  const [reviewStats, productStats, weeklyOrders] = await Promise.all([
     Review.aggregate([{ $match: { farmer: { $in: ids }, status: 'active' } }, { $group: { _id: '$farmer', rating: { $avg: '$rating' }, reviewsCount: { $sum: 1 } } }]),
     Product.aggregate([{ $match: { farmer: { $in: ids }, isAvailable: true } }, { $group: { _id: '$farmer', productsCount: { $sum: 1 } } }]),
+    Order.countDocuments({ createdAt: { $gte: sevenDaysAgo }, status: { $ne: 'cancelled' } }),
   ]);
   const reviewMap = new Map(reviewStats.map((item) => [String(item._id), item]));
   const productMap = new Map(productStats.map((item) => [String(item._id), item.productsCount]));
@@ -28,7 +33,10 @@ const getFarmers = asyncHandler(async (req, res) => {
   res.status(200).json({
     success: true,
     count: enriched.length,
-    data: { farmers: enriched },
+    data: {
+      farmers: enriched,
+      stats: { activeFarmers: enriched.length, weeklyOrders },
+    },
   });
 });
 

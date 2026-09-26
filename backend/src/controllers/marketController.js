@@ -1,4 +1,6 @@
 const Market = require('../models/Market');
+const Product = require('../models/Product');
+const User = require('../models/User');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 
@@ -33,12 +35,36 @@ const getMarkets = asyncHandler(async (req, res) => {
     };
   }
 
-  const markets = await Market.find(filter).sort({ name: 1 });
+  const markets = await Market.find(filter).sort({ name: 1 }).lean();
+  const activeFarmerIds = await User.find({ role: 'farmer', accountStatus: 'active' }).distinct('_id');
+  const marketIds = markets.map((market) => market._id);
+  const marketStats = await Product.aggregate([
+    { $match: { market: { $in: marketIds }, farmer: { $in: activeFarmerIds }, isAvailable: true } },
+    { $group: {
+      _id: '$market',
+      farmerIds: { $addToSet: '$farmer' },
+      productsCount: { $sum: 1 },
+      reviewsCount: { $sum: '$reviewCount' },
+      weightedRating: { $sum: { $multiply: ['$averageRating', '$reviewCount'] } },
+    } },
+  ]);
+  const statsByMarket = new Map(marketStats.map((stats) => [String(stats._id), stats]));
+  const enriched = markets.map((market) => {
+    const stats = statsByMarket.get(String(market._id));
+    const reviewsCount = stats?.reviewsCount || 0;
+    return {
+      ...market,
+      farmers: stats?.farmerIds.length || 0,
+      productsCount: stats?.productsCount || 0,
+      reviewsCount,
+      rating: reviewsCount ? Number((stats.weightedRating / reviewsCount).toFixed(1)) : 0,
+    };
+  });
 
   res.status(200).json({
     success: true,
-    count: markets.length,
-    data: { markets },
+    count: enriched.length,
+    data: { markets: enriched },
   });
 });
 

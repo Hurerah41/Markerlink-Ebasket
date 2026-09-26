@@ -11,7 +11,7 @@ const listFavorites = asyncHandler(async (req, res) => {
     .populate('farmer', 'name farmName location')
     .populate('market', 'name address location marketDays openingTime closingTime');
   const farmers = await User.find({ _id: { $in: favorites.filter((f) => f.targetType === 'farmer').map((f) => f.target) } })
-    .select('name farmName location accountStatus createdAt');
+    .select('name farmName imageUrl location accountStatus createdAt');
   const productAlertMap = new Map(favorites.filter((f) => f.targetType === 'product').map((f) => [String(f.target), f.restockAlert]));
   const productsWithAlerts = products.map((product) => ({ ...product.toObject(), restockAlert: Boolean(productAlertMap.get(String(product._id))) }));
 

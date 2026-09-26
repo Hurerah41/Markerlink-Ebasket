@@ -38,6 +38,7 @@ export default function Cart() {
   }
 
   const totalItemsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
+  const pickupGroups = new Set(cart.map((item) => `${item.farmerId}:${item.marketId}`)).size;
 
   return (
     <AnimatedPage>
@@ -97,6 +98,7 @@ export default function Cart() {
                               <span className="cart-item-farmer">
                                 <Store size={12} /> {item.farmer}
                               </span>
+                              <span className="cart-item-market"><MapPin size={12} /> {item.market}</span>
                             </div>
                           </div>
 
@@ -177,6 +179,11 @@ export default function Cart() {
                 <div className="summary-line">
                   <span>Total Quantity</span>
                   <span>{totalItemsCount} units</span>
+                </div>
+
+                <div className="summary-line">
+                  <span>Pickup Orders</span>
+                  <span>{pickupGroups} {pickupGroups === 1 ? "stall" : "stalls"}</span>
                 </div>
 
                 <div className="summary-line highlight-line">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Heart, ShoppingBag, MapPin, Clock, ArrowRight, BellRing, Sparkles, Store, Trash2 } from "lucide-react";
+import { Heart, ShoppingBag, MapPin, Clock, ArrowRight, BellRing, Sparkles, Store, Trash2, UserRound } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
 import ProductCard from "../components/ProductCard";
@@ -105,7 +105,8 @@ export default function Favorites() {
                         layout
                       >
                         <div className="farmer-card-header">
-                          <img src={farmer.image} alt={farmer.name} className="farmer-cover-img" />
+                          <div className="farmer-image-placeholder"><UserRound size={40} /><span>Photo not added</span></div>
+                          {farmer.image && <img src={farmer.image} alt={farmer.name} className="farmer-cover-img" onError={(event) => event.currentTarget.remove()} />}
                           <button
                             className="farmer-fav-btn active"
                             onClick={() => toggleFavoriteFarmer(farmer)}
@@ -144,7 +145,7 @@ export default function Favorites() {
                 </div>
               ) : (
                 <div className="empty-cart-card">
-                  <div className="empty-cart-icon">👨‍🌾</div>
+                  <div className="empty-cart-icon"><UserRound size={36} aria-hidden="true" /></div>
                   <h2>No Favorite Farmers Saved Yet</h2>
                   <p>Follow trusted local growers to see their weekly harvest schedules and stall locations first.</p>
                   <Link className="btn-primary-large" to="/farmers">

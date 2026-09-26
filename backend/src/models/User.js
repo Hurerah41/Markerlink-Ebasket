@@ -39,6 +39,10 @@ const userSchema = new mongoose.Schema(
       ref: 'Market',
       index: true,
     },
+    preferredMarkets: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Market',
+    }],
     markets: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Market' }],
     registrationNumber: {
       type: String,
@@ -60,6 +64,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       maxlength: [100, 'Farm name cannot exceed 100 characters'],
+    },
+    imageUrl: {
+      type: String,
+      trim: true,
+      maxlength: [2000, 'Profile image URL cannot exceed 2000 characters'],
     },
     location: {
       type: String,

@@ -12,12 +12,15 @@ const {
   updateFarmerStatus,
   createMarket,
   updateMarket,
+  uploadMarketImage,
+  deleteMarketImage,
   deleteMarket,
   listOrders,
   getReport,
 } = require('../controllers/adminController');
 const protect = require('../middleware/auth');
 const authorize = require('../middleware/authorize');
+const marketImageUpload = require('../middleware/marketImageUpload');
 
 const router = express.Router();
 
@@ -37,6 +40,8 @@ router.patch('/farmers/:id', updateFarmer);
 router.patch('/farmers/:id/status', updateFarmerStatus);
 router.post('/markets', createMarket);
 router.patch('/markets/:id', updateMarket);
+router.post('/markets/:id/image', marketImageUpload.single('image'), uploadMarketImage);
+router.delete('/markets/:id/image', deleteMarketImage);
 router.delete('/markets/:id', deleteMarket);
 
 module.exports = router;

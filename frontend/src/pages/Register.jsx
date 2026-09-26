@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Store, Mail, Lock, Phone, MapPin, FileText, ArrowRight, CheckCircle2, ShieldCheck, Sprout, Sparkles } from "lucide-react";
+import { User, Store, Mail, Lock, Phone, MapPin, FileText, ArrowRight, CheckCircle2, ShieldCheck, Sparkles } from "lucide-react";
 import AnimatedPage from "../components/AnimatedPage";
 import { useStore } from "../context/StoreContext";
 
@@ -59,8 +59,7 @@ export default function Register() {
 
           <div className="auth-visual-content">
             <div className="auth-brand-pill">
-              <Sprout size={18} />
-              <span>Join MarketLink Network</span>
+              <img className="auth-brand-logo" src="/marketlink-logo-2-transparent.png" alt="MarketLink — Farm Fresh Pre-Order" />
             </div>
 
             <h2 className="auth-visual-heading">

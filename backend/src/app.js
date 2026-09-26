@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const authRoutes = require('./routes/authRoutes');
 const marketRoutes = require('./routes/marketRoutes');
 const farmerRoutes = require('./routes/farmerRoutes');
@@ -36,6 +37,7 @@ app.use(
 );
 
 app.use(express.json({ limit: '10kb' }));
+app.use('/uploads', express.static(path.resolve(__dirname, '../uploads'), { maxAge: '7d', immutable: true }));
 
 app.get('/api/v1/health', (req, res) => {
   res.status(200).json({ success: true, message: 'MarketLink API is running' });

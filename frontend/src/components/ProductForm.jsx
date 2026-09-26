@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, Plus, Save, X } from "lucide-react";
+import { ImagePlus, PackageOpen, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { categories } from "../data";
 
 const units = ["kg", "gram", "piece", "dozen", "bunch", "box", "litre"];
@@ -20,7 +20,6 @@ const blankForm = {
   quantity: "",
   availableDate: "",
   market: "",
-  imageUrl: "",
   isAvailable: true,
 };
 
@@ -41,14 +40,24 @@ export default function ProductForm({
     quantity: product.quantity ?? product.stock ?? "",
     availableDate: localDate(product.availableDate),
     market: product.marketId || "",
-    imageUrl: product.imageUrl || (product.image?.includes("unsplash") ? "" : product.image) || "",
     isAvailable: product.isAvailable !== false,
   } : blankForm, [product]);
   const [form, setForm] = useState(initialValues);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(product?.imageUrl ? product.image : "");
+  const [removeImage, setRemoveImage] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setForm(initialValues), [initialValues]);
+  useEffect(() => {
+    setForm(initialValues);
+    setImageFile(null);
+    setImagePreview(product?.imageUrl ? product.image : "");
+    setRemoveImage(false);
+  }, [initialValues, product]);
+  useEffect(() => () => {
+    if (imagePreview?.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
+  }, [imagePreview]);
   useEffect(() => {
     if (!form.market && markets.length === 1) setForm((current) => ({ ...current, market: markets[0].id }));
   }, [markets, form.market]);
@@ -56,6 +65,29 @@ export default function ProductForm({
   const change = (field) => (event) => {
     const value = field === "isAvailable" ? event.target.checked : event.target.value;
     setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const chooseImage = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      event.target.value = "";
+      return setError("Upload a JPG, PNG, or WebP product image.");
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      event.target.value = "";
+      return setError("Product image must be 3 MB or smaller.");
+    }
+    setError("");
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setRemoveImage(false);
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview("");
+    setRemoveImage(Boolean(product?.imageUrl));
   };
 
   const submit = async (event) => {
@@ -83,10 +115,16 @@ export default function ProductForm({
         quantity,
         availableDate: form.availableDate,
         market: form.market,
-        imageUrl: form.imageUrl.trim(),
+        imageFile,
+        removeImage,
         isAvailable: Boolean(form.isAvailable),
       });
-      if (mode === "create") setForm({ ...blankForm, market: markets.length === 1 ? markets[0].id : "" });
+      if (mode === "create") {
+        setForm({ ...blankForm, market: markets.length === 1 ? markets[0].id : "" });
+        setImageFile(null);
+        setImagePreview("");
+        setRemoveImage(false);
+      }
     } catch (requestError) {
       setError(requestError.message || "The product could not be saved.");
     } finally {
@@ -143,9 +181,27 @@ export default function ProductForm({
           </select>
         </div>
       </div>
-      <div className="form-field-group">
-        <label htmlFor={`${mode}-product-image`}>Image URL (optional)</label>
-        <input id={`${mode}-product-image`} type="url" value={form.imageUrl} onChange={change("imageUrl")} placeholder="https://…" />
+      <div className="product-image-editor">
+        <div className={`product-image-preview ${imagePreview ? "has-photo" : ""}`}>
+          {imagePreview ? (
+            <img src={imagePreview} alt="Product preview" />
+          ) : (
+            <><PackageOpen size={30} aria-hidden="true" /><span>No product image selected</span></>
+          )}
+        </div>
+        <div className="form-field-group product-image-upload-field">
+          <label htmlFor={`${mode}-product-image`}><ImagePlus size={17} /> Product image</label>
+          <p className="field-help">Upload a clear JPG, PNG, or WebP image up to 3 MB.</p>
+          <label className="product-file-button" htmlFor={`${mode}-product-image`}>
+            <Upload size={16} /> {imageFile ? "Choose a different image" : imagePreview ? "Replace image" : "Upload image"}
+          </label>
+          <input id={`${mode}-product-image`} className="visually-hidden-file" type="file" accept="image/jpeg,image/png,image/webp" onChange={chooseImage} />
+          {imagePreview && (
+            <button type="button" className="remove-product-image" onClick={clearImage}>
+              <Trash2 size={15} /> Remove image
+            </button>
+          )}
+        </div>
       </div>
       <label className="inline-checkbox" htmlFor={`${mode}-product-available`}>
         <input id={`${mode}-product-available`} type="checkbox" checked={form.isAvailable} onChange={change("isAvailable")} />

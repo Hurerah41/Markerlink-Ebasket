@@ -1,10 +1,16 @@
 import { useMemo, useState } from "react";
-import { Search, SlidersHorizontal, X, ArrowUpDown, Filter, Sparkles } from "lucide-react";
+import { Search, X, ArrowUpDown, Leaf, Apple, Milk, Wheat, ShoppingBasket } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import AnimatedPage from "../components/AnimatedPage";
 import ProductCard from "../components/ProductCard";
 import { categories } from "../data";
 import { useStore } from "../context/StoreContext";
+
+const categoryIcons = { vegetables: Leaf, fruits: Apple, dairy: Milk, bakery: Wheat, basket: ShoppingBasket };
+const CategoryIcon = ({ name, size = 16 }) => {
+  const Icon = categoryIcons[name] || Leaf;
+  return <Icon size={size} aria-hidden="true" />;
+};
 
 export default function Products() {
   const { products, markets } = useStore();
@@ -12,8 +18,8 @@ export default function Products() {
   const initialCategory = params.get("category") || "all";
 
   const [category, setCategory] = useState(initialCategory);
-  const [search, setSearch] = useState("");
-  const [maxPrice, setMaxPrice] = useState(600);
+  const [search, setSearch] = useState(params.get("search") || "");
+  const [maxPrice, setMaxPrice] = useState(2000);
   const [sortBy, setSortBy] = useState("featured"); // 'featured', 'price-low', 'price-high', 'rating'
   const [marketId, setMarketId] = useState(params.get("market") || "");
   const [marketDay, setMarketDay] = useState(params.get("day") || "");
@@ -79,7 +85,7 @@ export default function Products() {
                 placeholder="Search tomatoes, potatoes, apples, milk, or farmer name..."
               />
               {search && (
-                <button className="clear-search-btn" onClick={() => setSearch("")}>
+                <button type="button" className="clear-search-btn" onClick={() => setSearch("")} aria-label="Clear product search">
                   <X size={16} />
                 </button>
               )}
@@ -90,7 +96,7 @@ export default function Products() {
               <ArrowUpDown size={16} />
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
                 <option value="featured">Sort: Recommended</option>
-                <option value="rating">Sort: Highest Rated ⭐</option>
+                <option value="rating">Sort: Highest Rated</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
               </select>
@@ -117,7 +123,7 @@ export default function Products() {
               <input
                 type="range"
                 min="100"
-                max="600"
+                max="2000"
                 step="20"
                 value={maxPrice}
                 onChange={(e) => setMaxPrice(Number(e.target.value))}
@@ -140,7 +146,7 @@ export default function Products() {
                 className={`chip-button ${category === c.slug ? "active" : ""}`}
                 onClick={() => handleCategoryChange(c.slug)}
               >
-                <span>{c.icon}</span>
+                <CategoryIcon name={c.icon} />
                 <span>{c.name}</span>
               </button>
             ))}
@@ -151,16 +157,17 @@ export default function Products() {
             <span>
               Showing <strong>{filteredProducts.length}</strong> fresh products available for market pickup
             </span>
-            {(category !== "all" || search || maxPrice < 600 || marketId || marketDay) && (
+            {(category !== "all" || search || maxPrice < 2000 || marketId || marketDay) && (
               <button
                 className="reset-filters-btn"
                 onClick={() => {
                   setCategory("all");
                   setSearch("");
-                  setMaxPrice(600);
+                  setMaxPrice(2000);
                   setMarketId("");
                   setMarketDay("");
                   params.delete("category");
+                  params.delete("search");
                   setParams(params);
                 }}
               >
@@ -179,7 +186,7 @@ export default function Products() {
           {/* Empty state */}
           {filteredProducts.length === 0 && (
             <div className="empty-cart-card">
-              <div className="empty-cart-icon">🥬</div>
+              <div className="empty-cart-icon"><Leaf size={36} aria-hidden="true" /></div>
               <h2>No Matching Products Found</h2>
               <p>We couldn't find any produce matching your current filter criteria.</p>
               <button
@@ -187,7 +194,7 @@ export default function Products() {
                 onClick={() => {
                   setCategory("all");
                   setSearch("");
-                  setMaxPrice(600);
+                  setMaxPrice(2000);
                   setMarketId("");
                   setMarketDay("");
                 }}

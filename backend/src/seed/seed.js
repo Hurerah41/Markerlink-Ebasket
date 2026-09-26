@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 const connectDB = require('../config/db');
 const User = require('../models/User');
 const Market = require('../models/Market');
@@ -98,7 +100,7 @@ const seed = async () => {
     address: 'Malir, Karachi',
     bio: 'Seasonal vegetables and fruit grown for Karachi community markets.',
   });
-  await User.findByIdAndUpdate(customer._id, { address: 'Gulshan-e-Iqbal, Karachi', preferredMarket: cliftonMarket._id });
+  await User.findByIdAndUpdate(customer._id, { address: 'Gulshan-e-Iqbal, Karachi', preferredMarket: cliftonMarket._id, preferredMarkets: [cliftonMarket._id] });
   await User.findByIdAndUpdate(secondFarmer._id, {
     markets: [gulshanMarket._id],
     operatingDays: ['friday', 'sunday'],
@@ -197,6 +199,24 @@ const seed = async () => {
     other: 'https://images.unsplash.com/photo-1542838132-92c53300491e',
   };
 
+  // Product artwork is served by the frontend public directory. Matching by
+  // filename means newly added "Product Name.ext" images are picked up the
+  // next time the seed runs without another code change.
+  const productImagesDirectory = path.resolve(__dirname, '../../../frontend/public/product-images');
+  const productImageFiles = fs.existsSync(productImagesDirectory)
+    ? fs.readdirSync(productImagesDirectory).filter((file) => /\.(avif|jpe?g|png|webp)$/i.test(file))
+    : [];
+  const imageByProductName = new Map(productImageFiles.map((file) => [path.parse(file).name.toLowerCase(), file]));
+  const imageAliases = {
+    'Organic Tomatoes': 'tomato.webp',
+    'Sindhri Mangoes': 'Sindhri Mangoe.jpg',
+  };
+
+  const productImageUrl = (name, category) => {
+    const file = imageAliases[name] || imageByProductName.get(name.toLowerCase());
+    return file ? `/product-images/${encodeURIComponent(file)}` : imageByCategory[category];
+  };
+
   for (let index = 0; index < productCatalogue.length; index += 1) {
     const [name, category, unit, price, quantity] = productCatalogue[index];
     const owner = index % 2 === 0 ? farmer : secondFarmer;
@@ -213,7 +233,7 @@ const seed = async () => {
         price,
         quantity,
         availableDate,
-        imageUrl: imageByCategory[category],
+        imageUrl: productImageUrl(name, category),
         isAvailable: true,
       },
       { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }

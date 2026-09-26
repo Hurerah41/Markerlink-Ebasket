@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, clearSession, getStoredUser, getToken, saveSession } from "../api/client";
 import { backendStatus, entityId, normalizeFarmer, normalizeMarket, normalizeOrder, normalizeProduct, normalizeReview } from "../api/normalize";
 
@@ -12,10 +12,12 @@ function readStorage(key, fallback) {
 }
 
 export function StoreProvider({ children }) {
+  const initialLoadStarted = useRef(false);
   const [productsList, setProductsList] = useState([]);
   const [farmerProducts, setFarmerProducts] = useState([]);
   const [farmersList, setFarmersList] = useState([]);
   const [marketsList, setMarketsList] = useState([]);
+  const [platformStats, setPlatformStats] = useState({ activeFarmers: 0, weeklyOrders: 0 });
   const [cart, setCart] = useState(() => readStorage(CART_KEY, []));
   const [favorites, setFavorites] = useState(() => readStorage(FAVORITES_KEY, []));
   const [favoriteFarmers, setFavoriteFarmers] = useState(() => readStorage(FAVORITE_FARMERS_KEY, []));
@@ -56,6 +58,10 @@ export function StoreProvider({ children }) {
       setProductsList((productsResponse.data?.products || []).map(normalizeProduct));
       setMarketsList((marketsResponse.data?.markets || []).map(normalizeMarket));
       setFarmersList((farmersResponse.data?.farmers || []).map(normalizeFarmer));
+      setPlatformStats({
+        activeFarmers: Number(farmersResponse.data?.stats?.activeFarmers ?? farmersResponse.data?.farmers?.length ?? 0),
+        weeklyOrders: Number(farmersResponse.data?.stats?.weeklyOrders ?? 0),
+      });
 
     } catch (error) {
       notify("API unavailable", error.message || "Start the backend server to load live MarketLink data");
@@ -140,6 +146,8 @@ export function StoreProvider({ children }) {
   }, [fetchCatalog, fetchFarmerProducts, fetchOrders, fetchFavorites, fetchNotifications, fetchAnnouncements]);
 
   useEffect(() => {
+    if (initialLoadStarted.current) return;
+    initialLoadStarted.current = true;
     if (getToken()) hydrateSession();
     else {
       fetchCatalog(currentUserState);
@@ -191,12 +199,6 @@ export function StoreProvider({ children }) {
   const addToCart = (product, quantity = 1) => {
     const productId = entityId(product);
     const maxStock = Number(product.stock ?? product.quantity ?? 0);
-    const productGroup = `${product.farmerId || entityId(product.farmer)}:${product.marketId || entityId(product.market)}`;
-    const incompatible = cart.some((item) => `${item.farmerId || entityId(item.farmer)}:${item.marketId || entityId(item.market)}` !== productGroup);
-    if (incompatible) {
-      notify("Basket uses one farmer and market", "Complete or clear the current basket before adding products from another stall.", "error");
-      return;
-    }
     setCart((current) => {
       const existing = current.find((item) => entityId(item) === productId);
       if (existing) {
@@ -262,16 +264,40 @@ export function StoreProvider({ children }) {
     } catch (error) { notify("Could not update favorite farmer", error.message); }
   };
 
-  const placeOrder = async ({ pickupDate, pickupSlot = "", notes = "" }) => {
+  const placeOrder = async ({ orders: pickupPlans = [], notes = "" }) => {
     if (!getToken() || currentUser.role !== "customer") throw new Error("Please sign in as a customer before checkout.");
-    const groups = new Set(cart.map((item) => `${item.farmerId || entityId(item.farmer)}:${item.marketId || entityId(item.market)}`));
-    if (groups.size > 1) throw new Error("Checkout supports one farmer at one market per order. Remove items from other farmers or markets before continuing.");
-    const payload = { items: cart.map((item) => ({ product: entityId(item), quantity: item.quantity })), pickupDate, pickupSlot, notes };
-    const response = await api.post("/orders", payload);
-    clearCart();
+    const groups = cart.reduce((result, item) => {
+      const key = `${item.farmerId || entityId(item.farmer)}:${item.marketId || entityId(item.market)}`;
+      if (!result.has(key)) result.set(key, []);
+      result.get(key).push(item);
+      return result;
+    }, new Map());
+    const planMap = new Map(pickupPlans.map((plan) => [plan.key, plan]));
+    const placedOrders = [];
+
+    for (const [key, items] of groups) {
+      const plan = planMap.get(key);
+      if (!plan?.pickupDate || !plan?.pickupSlot) throw new Error(`Choose a pickup date and time for ${items[0]?.farmer || "each farmer"}.`);
+      try {
+        const response = await api.post("/orders", {
+          items: items.map((item) => ({ product: entityId(item), quantity: item.quantity })),
+          pickupDate: plan.pickupDate,
+          pickupSlot: plan.pickupSlot,
+          notes,
+        });
+        placedOrders.push(normalizeOrder(response.data.order));
+        const placedIds = new Set(items.map(entityId));
+        setCart((current) => current.filter((item) => !placedIds.has(entityId(item))));
+      } catch (error) {
+        await Promise.all([fetchCatalog(currentUser), fetchOrders(currentUser)]);
+        const prefix = placedOrders.length ? `${placedOrders.length} order${placedOrders.length === 1 ? " was" : "s were"} placed. ` : "";
+        throw new Error(`${prefix}${error.message} Unplaced items remain in your basket.`);
+      }
+    }
+
     await Promise.all([fetchCatalog(currentUser), fetchOrders(currentUser)]);
-    notify("Pre-order placed successfully!", "Prices and total were calculated by the backend");
-    return normalizeOrder(response.data.order);
+    notify(`${placedOrders.length} pre-order${placedOrders.length === 1 ? "" : "s"} placed successfully!`, "Each farmer received their own pickup order");
+    return placedOrders;
   };
 
   const updateOrderStatus = async (orderId, label) => {
@@ -315,15 +341,38 @@ export function StoreProvider({ children }) {
       price: Number(productData.price),
       quantity: Number(productData.stock ?? productData.quantity),
       availableDate: productData.availableDate || nextAvailableDate(),
-      imageUrl: productData.imageUrl || productData.image,
+      isAvailable: productData.isAvailable !== false,
     });
+    let savedProduct = response.data.product;
+    if (productData.imageFile) {
+      try {
+        const formData = new FormData();
+        formData.append("image", productData.imageFile);
+        const uploadResponse = await api.upload(`/products/${entityId(savedProduct)}/image`, formData);
+        savedProduct = uploadResponse.data.product;
+      } catch (error) {
+        notify("Product published without its image", error.message);
+      }
+    }
     await Promise.all([fetchCatalog(currentUser), fetchFarmerProducts(currentUser)]);
     notify("Product added to catalogue!", "The backend now owns this listing");
-    return normalizeProduct(response.data.product);
+    return normalizeProduct(savedProduct);
   };
 
   const updateProduct = async (id, productData) => {
-    const response = await api.patch(`/products/${id}`, productData);
+    const { imageFile, removeImage, ...details } = productData;
+    let response = await api.patch(`/products/${id}`, details);
+    try {
+      if (imageFile) {
+        const formData = new FormData();
+        formData.append("image", imageFile);
+        response = await api.upload(`/products/${id}/image`, formData);
+      } else if (removeImage) {
+        response = await api.delete(`/products/${id}/image`);
+      }
+    } catch (error) {
+      notify("Product details saved, but the image was not updated", error.message);
+    }
     const updated = normalizeProduct(response.data.product);
     setFarmerProducts((current) => current.map((item) => entityId(item) === id ? updated : item));
     await fetchFarmerProducts(currentUser);
@@ -351,11 +400,13 @@ export function StoreProvider({ children }) {
 
   const adminUpdateFarmer = async (id, updates) => {
     const response = await api.patch(`/admin/farmers/${id}`, updates);
+    await fetchCatalog(currentUser);
     return normalizeFarmer(response.data.farmer);
   };
 
   const adminUpdateFarmerStatus = async (id, status) => {
     const response = await api.patch(`/admin/farmers/${id}/status`, { status });
+    await fetchCatalog(currentUser);
     return normalizeFarmer(response.data.farmer);
   };
 
@@ -368,7 +419,26 @@ export function StoreProvider({ children }) {
 
   const adminUpdateMarket = async (id, market) => {
     const response = await api.patch(`/admin/markets/${id}`, market);
-    const updated = normalizeMarket(response.data.market);
+    const existing = marketsList.find((item) => item.id === id);
+    const updated = { ...normalizeMarket(response.data.market), farmers: existing?.farmers || 0, productsCount: existing?.productsCount || 0, rating: existing?.rating || 0, reviewsCount: existing?.reviewsCount || 0 };
+    setMarketsList((current) => current.map((item) => item.id === id ? updated : item));
+    return updated;
+  };
+
+  const adminUploadMarketImage = async (id, file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await api.upload(`/admin/markets/${id}/image`, formData);
+    const existing = marketsList.find((item) => item.id === id);
+    const updated = { ...normalizeMarket(response.data.market), farmers: existing?.farmers || 0, productsCount: existing?.productsCount || 0, rating: existing?.rating || 0, reviewsCount: existing?.reviewsCount || 0 };
+    setMarketsList((current) => current.map((item) => item.id === id ? updated : item));
+    return updated;
+  };
+
+  const adminRemoveMarketImage = async (id) => {
+    const response = await api.delete(`/admin/markets/${id}/image`);
+    const existing = marketsList.find((item) => item.id === id);
+    const updated = { ...normalizeMarket(response.data.market), farmers: existing?.farmers || 0, productsCount: existing?.productsCount || 0, rating: existing?.rating || 0, reviewsCount: existing?.reviewsCount || 0 };
     setMarketsList((current) => current.map((item) => item.id === id ? updated : item));
     return updated;
   };
@@ -414,7 +484,28 @@ export function StoreProvider({ children }) {
     const response = await api.patch("/auth/me", updates);
     saveSession(getToken(), response.data.user);
     setCurrentUserState(response.data.user);
+    await fetchCatalog(response.data.user);
     notify("Profile updated", "Your account details were saved");
+    return response.data.user;
+  };
+
+  const uploadProfileImage = async (file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await api.upload("/auth/me/image", formData);
+    saveSession(getToken(), response.data.user);
+    setCurrentUserState(response.data.user);
+    await fetchCatalog(response.data.user);
+    notify("Profile image uploaded", "Your new farmer photo is now visible");
+    return response.data.user;
+  };
+
+  const removeProfileImage = async () => {
+    const response = await api.delete("/auth/me/image");
+    saveSession(getToken(), response.data.user);
+    setCurrentUserState(response.data.user);
+    await fetchCatalog(response.data.user);
+    notify("Profile image removed");
     return response.data.user;
   };
 
@@ -485,17 +576,17 @@ export function StoreProvider({ children }) {
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * item.quantity, 0);
 
   const value = useMemo(() => ({
-    products: productsList, farmerProducts, farmers: farmersList, markets: marketsList, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements,
+    products: productsList, farmerProducts, farmers: farmersList, markets: marketsList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements,
     cartCount, subtotal, toast, currentUser, isLoading,
     setCurrentUser, login, register, logout, refreshCatalog: fetchCatalog, refreshFarmerProducts: fetchFarmerProducts, refreshOrders: fetchOrders,
     addToCart, updateQuantity, removeFromCart, clearCart, reorder, toggleFavorite, toggleFavoriteFarmer, placeOrder,
     updateOrderStatus, cancelOrder, modifyOrder, addProduct, updateProduct, updateProductStock, deleteProduct, addReview,
-    getProductReviews, getFarmerReviews, respondToReview, updateProfile,
-    adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminDeleteMarket,
+    getProductReviews, getFarmerReviews, respondToReview, updateProfile, uploadProfileImage, removeProfileImage,
+    adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminUploadMarketImage, adminRemoveMarketImage, adminDeleteMarket,
     adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview,
     fetchNotifications, markNotificationRead, markAllNotificationsRead, setRestockAlert,
     adminListAnnouncements, adminCreateAnnouncement, adminUpdateAnnouncement, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify,
-  }), [productsList, farmerProducts, farmersList, marketsList, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements, cartCount, subtotal, toast, currentUser, isLoading, setCurrentUser, login, register, logout, fetchCatalog, fetchFarmerProducts, fetchOrders, fetchFavorites, authenticate, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify]);
+  }), [productsList, farmerProducts, farmersList, marketsList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements, cartCount, subtotal, toast, currentUser, isLoading, setCurrentUser, login, register, logout, fetchCatalog, fetchFarmerProducts, fetchOrders, fetchFavorites, authenticate, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

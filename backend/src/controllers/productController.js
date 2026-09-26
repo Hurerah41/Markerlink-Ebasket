@@ -1,5 +1,7 @@
 const Product = require('../models/Product');
 const mongoose = require('mongoose');
+const fs = require('fs/promises');
+const path = require('path');
 const Market = require('../models/Market');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
@@ -19,6 +21,14 @@ const productFields = [
   'isAvailable',
 ];
 const CATEGORIES = ['vegetables', 'fruits', 'dairy', 'baked-goods', 'other'];
+
+const removeStoredProductImage = async (imageUrl) => {
+  if (!imageUrl?.startsWith('/uploads/products/')) return;
+  const filename = path.basename(imageUrl);
+  await fs.unlink(path.resolve(__dirname, '../../uploads/products', filename)).catch((error) => {
+    if (error.code !== 'ENOENT') throw error;
+  });
+};
 
 const pick = (source, fields) =>
   fields.reduce((result, field) => {
@@ -151,6 +161,43 @@ const updateProduct = asyncHandler(async (req, res) => {
   });
 });
 
+const uploadProductImage = asyncHandler(async (req, res) => {
+  if (!req.file) throw new AppError('Choose an image to upload', 400);
+
+  const product = await Product.findOne({ _id: req.params.id, farmer: req.user._id });
+  if (!product) {
+    await fs.unlink(req.file.path).catch(() => {});
+    throw new AppError('Product not found or not owned by you', 404);
+  }
+
+  const previousImage = product.imageUrl;
+  product.imageUrl = `/uploads/products/${req.file.filename}`;
+  await product.save();
+  await removeStoredProductImage(previousImage);
+
+  res.status(200).json({
+    success: true,
+    message: 'Product image uploaded successfully',
+    data: { product },
+  });
+});
+
+const deleteProductImage = asyncHandler(async (req, res) => {
+  const product = await Product.findOne({ _id: req.params.id, farmer: req.user._id });
+  if (!product) throw new AppError('Product not found or not owned by you', 404);
+
+  const previousImage = product.imageUrl;
+  product.imageUrl = '';
+  await product.save();
+  await removeStoredProductImage(previousImage);
+
+  res.status(200).json({
+    success: true,
+    message: 'Product image removed successfully',
+    data: { product },
+  });
+});
+
 const archiveProduct = asyncHandler(async (req, res) => {
   const product = await Product.findOneAndUpdate(
     { _id: req.params.id, farmer: req.user._id },
@@ -172,6 +219,8 @@ module.exports = {
   getMyProducts,
   createProduct,
   updateProduct,
+  uploadProductImage,
+  deleteProductImage,
   archiveProduct,
 };
 

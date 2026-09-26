@@ -237,8 +237,14 @@ export default function WeeklyStock() {
               <button className="btn-primary" type="submit" disabled={saving}>{saving ? "Saving…" : editingId ? "Save Changes" : "Save recurring stock"}</button>
             </form>
 
-            <div className="dash-card">
-              <h3>Saved templates</h3>
+            <div className="dash-card weekly-saved-templates">
+              <div className="saved-templates-heading">
+                <div>
+                  <span className="eyebrow">Ready to reuse</span>
+                  <h3>Saved templates</h3>
+                </div>
+                <span className="saved-template-count">{templates.length}</span>
+              </div>
               {!templates.length && <div className="weekly-state-card"><CalendarDays size={30} /><h4>No recurring stock templates yet</h4><p>Create one using the form.</p></div>}
               <div className="dash-stock-list">
                 {templates.map((template) => {
