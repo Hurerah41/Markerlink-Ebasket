@@ -17,6 +17,7 @@ export function StoreProvider({ children }) {
   const [farmerProducts, setFarmerProducts] = useState([]);
   const [farmersList, setFarmersList] = useState([]);
   const [marketsList, setMarketsList] = useState([]);
+  const [categoriesList, setCategoriesList] = useState([]);
   const [platformStats, setPlatformStats] = useState({ activeFarmers: 0, weeklyOrders: 0 });
   const [cart, setCart] = useState(() => readStorage(CART_KEY, []));
   const [favorites, setFavorites] = useState(() => readStorage(FAVORITES_KEY, []));
@@ -50,14 +51,16 @@ export function StoreProvider({ children }) {
   const fetchCatalog = useCallback(async (user = currentUserState) => {
     setIsLoading(true);
     try {
-      const [productsResponse, marketsResponse, farmersResponse] = await Promise.all([
+      const [productsResponse, marketsResponse, farmersResponse, categoriesResponse] = await Promise.all([
         api.get("/products?inStock=true"),
         api.get("/markets"),
         api.get("/farmers"),
+        api.get("/categories"),
       ]);
       setProductsList((productsResponse.data?.products || []).map(normalizeProduct));
       setMarketsList((marketsResponse.data?.markets || []).map(normalizeMarket));
       setFarmersList((farmersResponse.data?.farmers || []).map(normalizeFarmer));
+      setCategoriesList((categoriesResponse.data?.categories || []).map((category) => ({ ...category, id: category._id || category.id })));
       setPlatformStats({
         activeFarmers: Number(farmersResponse.data?.stats?.activeFarmers ?? farmersResponse.data?.farmers?.length ?? 0),
         weeklyOrders: Number(farmersResponse.data?.stats?.weeklyOrders ?? 0),
@@ -375,7 +378,7 @@ export function StoreProvider({ children }) {
     }
     const updated = normalizeProduct(response.data.product);
     setFarmerProducts((current) => current.map((item) => entityId(item) === id ? updated : item));
-    await fetchFarmerProducts(currentUser);
+    await Promise.all([fetchFarmerProducts(currentUser), fetchCatalog(currentUser)]);
     notify("Product updated", `${updated.name} was saved successfully`);
     return updated;
   };
@@ -538,6 +541,15 @@ export function StoreProvider({ children }) {
     return response.data.report;
   };
 
+  const adminListProducts = async () => ((await api.get("/admin/products")).data?.products || []).map(normalizeProduct);
+  const adminUpdateProductStatus = async (id, isAvailable) => normalizeProduct((await api.patch(`/admin/products/${id}/status`, { isAvailable })).data.product);
+  const adminListReviews = async () => ((await api.get("/admin/reviews")).data?.reviews || []).map(normalizeReview);
+  const adminListCategories = async () => ((await api.get("/admin/categories")).data?.categories || []).map((category) => ({ ...category, id: category._id || category.id }));
+  const adminCreateCategory = async (category) => (await api.post("/admin/categories", category)).data.category;
+  const adminUpdateCategory = async (id, category) => (await api.patch(`/admin/categories/${id}`, category)).data.category;
+  const adminArchiveCategory = async (id) => (await api.delete(`/admin/categories/${id}`)).data.category;
+  const adminBroadcastNotification = async (notification) => api.post("/admin/notifications/broadcast", notification);
+
   const adminRemoveReview = async (id) => {
     await api.delete(`/admin/reviews/${id}`);
     setReviews((current) => current.filter((review) => review.id !== id));
@@ -576,7 +588,7 @@ export function StoreProvider({ children }) {
   const subtotal = cart.reduce((sum, item) => sum + Number(item.price || 0) * item.quantity, 0);
 
   const value = useMemo(() => ({
-    products: productsList, farmerProducts, farmers: farmersList, markets: marketsList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements,
+    products: productsList, farmerProducts, farmers: farmersList, markets: marketsList, categories: categoriesList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements,
     cartCount, subtotal, toast, currentUser, isLoading,
     setCurrentUser, login, register, logout, refreshCatalog: fetchCatalog, refreshFarmerProducts: fetchFarmerProducts, refreshOrders: fetchOrders,
     addToCart, updateQuantity, removeFromCart, clearCart, reorder, toggleFavorite, toggleFavoriteFarmer, placeOrder,
@@ -584,9 +596,10 @@ export function StoreProvider({ children }) {
     getProductReviews, getFarmerReviews, respondToReview, updateProfile, uploadProfileImage, removeProfileImage,
     adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminUploadMarketImage, adminRemoveMarketImage, adminDeleteMarket,
     adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview,
+    adminListProducts, adminUpdateProductStatus, adminListReviews, adminListCategories, adminCreateCategory, adminUpdateCategory, adminArchiveCategory, adminBroadcastNotification,
     fetchNotifications, markNotificationRead, markAllNotificationsRead, setRestockAlert,
     adminListAnnouncements, adminCreateAnnouncement, adminUpdateAnnouncement, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify,
-  }), [productsList, farmerProducts, farmersList, marketsList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements, cartCount, subtotal, toast, currentUser, isLoading, setCurrentUser, login, register, logout, fetchCatalog, fetchFarmerProducts, fetchOrders, fetchFavorites, authenticate, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify]);
+  }), [productsList, farmerProducts, farmersList, marketsList, categoriesList, platformStats, cart, favorites, favoriteFarmers, orders, reviews, notifications, unreadNotifications, announcements, cartCount, subtotal, toast, currentUser, isLoading, setCurrentUser, login, register, logout, fetchCatalog, fetchFarmerProducts, fetchOrders, fetchFavorites, authenticate, getWeeklyStock, saveWeeklyStock, applyWeeklyStock, deleteWeeklyStock, notify]);
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }

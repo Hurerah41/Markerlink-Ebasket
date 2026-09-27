@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Heart, MapPin, Plus, Minus, ShoppingCart, Star, 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
+import ProductCard from "../components/ProductCard";
 import { useStore } from "../context/StoreContext";
 
 export default function ProductDetails() {
@@ -20,6 +21,12 @@ export default function ProductDetails() {
   useEffect(() => {
     if (product?.id) getProductReviews(product.id).catch((error) => notify("Could not load reviews", error.message));
   }, [product?.id]);
+
+  useEffect(() => {
+    setQty(1);
+    setActiveImgIndex(0);
+    setIsAdded(false);
+  }, [id]);
 
   if (!product) {
     return (
@@ -42,6 +49,10 @@ export default function ProductDetails() {
   const displayRating = productReviews.length ? productReviews.reduce((sum, review) => sum + review.rating, 0) / productReviews.length : 0;
   const galleryImages = product.images && product.images.length > 0 ? product.images : [product.image];
   const ratingLabels = ["", "Poor", "Fair", "Good", "Very good", "Excellent"];
+  const relatedProducts = [
+    ...products.filter((item) => String(item.id) !== String(product.id) && item.category === product.category),
+    ...products.filter((item) => String(item.id) !== String(product.id) && item.category !== product.category && item.marketId === product.marketId),
+  ].filter((item, index, list) => list.findIndex((candidate) => String(candidate.id) === String(item.id)) === index).slice(0, 4);
 
   const handleAddToCart = () => {
     if (product.stock <= 0) return;
@@ -236,6 +247,18 @@ export default function ProductDetails() {
               </div>
             </div>
           </div>
+
+          {relatedProducts.length > 0 && (
+            <section className="related-products-section" aria-labelledby="related-products-title">
+              <div className="related-products-heading">
+                <div><span className="eyebrow">More Fresh Picks</span><h2 id="related-products-title">Related Products</h2><p>Similar produce from this category and pickup market.</p></div>
+                <Link className="related-products-link" to={`/products?category=${encodeURIComponent(product.category)}`}>View category <ArrowRight size={15} /></Link>
+              </div>
+              <div className="products-responsive-grid related-products-grid">
+                {relatedProducts.map((item) => <ProductCard product={item} key={item.id} />)}
+              </div>
+            </section>
+          )}
 
           {/* CUSTOMER REVIEWS & RATINGS SECTION */}
           <div className="product-reviews-section">

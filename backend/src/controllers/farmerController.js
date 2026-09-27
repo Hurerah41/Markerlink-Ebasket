@@ -5,7 +5,7 @@ const Product = require('../models/Product');
 const Review = require('../models/Review');
 const Order = require('../models/Order');
 
-const publicFields = 'name farmName imageUrl email phone location bio operatingDays pickupStartTime pickupEndTime orderCutoffTime pickupSlotMinutes coordinates markets preferredMarket createdAt';
+const publicFields = 'name farmName imageUrl email phone location bio operatingDays pickupStartTime pickupEndTime orderCutoffTime pickupSlotMinutes coordinates markets preferredMarket accountStatus createdAt';
 
 const getFarmers = asyncHandler(async (req, res) => {
   const filter = { role: 'farmer', accountStatus: 'active' };

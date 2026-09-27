@@ -10,7 +10,6 @@ export default function Footer() {
             <img className="footer-brand-image" src="/marketlink-logo-2-transparent.png" alt="MarketLink — Farm Fresh Pre-Order" />
           </div>
           <p>Connecting local farmers with customers through fresh, predictable and convenient market shopping.</p>
-          <div className="socials"><Instagram/><Facebook/><Youtube/></div>
         </div>
         <div><h4>Explore</h4><Link to="/products">Products</Link><Link to="/farmers">Farmers</Link><Link to="/markets">Markets</Link><Link to="/favorites">Favorites</Link></div>
         <div><h4>Support</h4><Link to="/about">About Us</Link><Link to="/contact">Contact Us</Link><Link to="/orders">My Orders</Link></div>

@@ -43,6 +43,7 @@ function RoleRoute({ role, children, approvedOnly = false }) {
 export default function App() {
   const { toast, announcements } = useStore();
   const location = useLocation();
+  const isAuthPage = location.pathname === "/login" || location.pathname === "/register";
 
   useEffect(() => {
     const fallback = "data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='620' viewBox='0 0 900 620'%3E%3Crect width='900' height='620' fill='%23e5f3ea'/%3E%3Cpath d='M450 405c-95-84-104-196 8-247 4 80 49 109 111 129-23 78-61 118-119 118Z' fill='%23176b43' opacity='.82'/%3E%3Cpath d='M452 402c-4-93 27-162 89-211' stroke='%23fff' stroke-width='18' stroke-linecap='round' opacity='.75'/%3E%3C/svg%3E";
@@ -57,7 +58,7 @@ export default function App() {
   }, []);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${isAuthPage ? "auth-route" : ""}`}>
       <ScrollToTop />
       <Navbar />
       {location.pathname === "/" && announcements.length > 0 && (

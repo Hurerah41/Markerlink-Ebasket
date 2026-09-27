@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, Store, ArrowRight, ShieldCheck, CheckCircle2, Sparkles, ShieldAlert, Hand } from "lucide-react";
+import { Mail, Lock, ArrowRight, ShieldCheck, CheckCircle2, Sparkles, Hand } from "lucide-react";
 import { motion } from "framer-motion";
 import AnimatedPage from "../components/AnimatedPage";
 import { useStore } from "../context/StoreContext";
@@ -8,7 +8,6 @@ import { useStore } from "../context/StoreContext";
 export default function Login() {
   const navigate = useNavigate();
   const { login, notify } = useStore();
-  const [role, setRole] = useState("customer"); // 'customer' or 'farmer'
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -23,20 +22,6 @@ export default function Login() {
     } catch (requestError) {
       setError(requestError.message || "Unable to sign in");
       notify("Sign in failed", requestError.message);
-    }
-  };
-
-  const handleDemoFill = (selectedRole) => {
-    setRole(selectedRole);
-    if (selectedRole === "farmer") {
-      setEmail("farmer@marketlink.test");
-      setPassword("Farmer123!");
-    } else if (selectedRole === "admin") {
-      setEmail("admin@marketlink.test");
-      setPassword("Admin123!");
-    } else {
-      setEmail("customer@marketlink.test");
-      setPassword("Customer123!");
     }
   };
 
@@ -94,62 +79,6 @@ export default function Login() {
               </p>
             </div>
 
-            {/* Role Switcher Tabs */}
-            <div className="role-toggle-bar" style={{ "--role-tab-count": 3 }}>
-              <button
-                type="button"
-                className={`role-tab ${role === "customer" ? "active" : ""}`}
-                onClick={() => handleDemoFill("customer")}
-              >
-                <User size={16} />
-                <span>Continue as Customer</span>
-              </button>
-              <button
-                type="button"
-                className={`role-tab ${role === "farmer" ? "active" : ""}`}
-                onClick={() => handleDemoFill("farmer")}
-              >
-                <Store size={16} />
-                <span>Continue as Farmer</span>
-              </button>
-              <button
-                type="button"
-                className={`role-tab ${role === "admin" ? "active" : ""}`}
-                onClick={() => handleDemoFill("admin")}
-              >
-                <ShieldAlert size={16} />
-                <span>Continue as Admin</span>
-              </button>
-            </div>
-
-            {/* Quick Demo Login Preset Helper */}
-            <div className="demo-hint-box">
-              <small>Testing demo mode? Click to prefill credentials:</small>
-              <div className="demo-pill-group">
-                <button
-                  type="button"
-                  className="demo-chip"
-                  onClick={() => handleDemoFill("customer")}
-                >
-                  <Sparkles size={14} /> Demo Customer
-                </button>
-                <button
-                  type="button"
-                  className="demo-chip"
-                  onClick={() => handleDemoFill("farmer")}
-                >
-                  <Sparkles size={14} /> Demo Farmer
-                </button>
-                <button
-                  type="button"
-                  className="demo-chip"
-                  onClick={() => handleDemoFill("admin")}
-                >
-                  <Sparkles size={14} /> Demo Admin
-                </button>
-              </div>
-            </div>
-
             {error && <div className="form-error-message" role="alert">{error}</div>}
 
             <form onSubmit={handleLogin} className="auth-main-form">
@@ -182,7 +111,7 @@ export default function Login() {
               </div>
 
               <button type="submit" className="btn-primary-large full-width">
-                <span>Sign In as {role === "farmer" ? "Farmer" : role === "admin" ? "Admin" : "Customer"}</span>
+                <span>Sign In</span>
                 <ArrowRight size={18} />
               </button>
             </form>

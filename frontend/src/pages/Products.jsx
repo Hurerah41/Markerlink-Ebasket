@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Search, X, ArrowUpDown, Leaf, Apple, Milk, Wheat, ShoppingBasket } from "lucide-react";
+import { Search, X, ArrowUpDown, Leaf, Apple, Milk, Wheat, ShoppingBasket, MapPin, CalendarDays, ChevronDown } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import AnimatedPage from "../components/AnimatedPage";
 import ProductCard from "../components/ProductCard";
-import { categories } from "../data";
+import { categories as fallbackCategories } from "../data";
 import { useStore } from "../context/StoreContext";
 
 const categoryIcons = { vegetables: Leaf, fruits: Apple, dairy: Milk, bakery: Wheat, basket: ShoppingBasket };
@@ -13,7 +13,8 @@ const CategoryIcon = ({ name, size = 16 }) => {
 };
 
 export default function Products() {
-  const { products, markets } = useStore();
+  const { products, markets, categories: liveCategories = [] } = useStore();
+  const categories = liveCategories.length ? liveCategories : fallbackCategories;
   const [params, setParams] = useSearchParams();
   const initialCategory = params.get("category") || "all";
 
@@ -92,26 +93,31 @@ export default function Products() {
             </div>
 
             {/* Sort Selector */}
-            <div className="sort-filter-box">
-              <ArrowUpDown size={16} />
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-                <option value="featured">Sort: Recommended</option>
-                <option value="rating">Sort: Highest Rated</option>
+            <div className="sort-filter-box catalog-select-box">
+              <span className="catalog-select-icon"><ArrowUpDown size={17} /></span>
+              <label><small>Sort by</small><select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                <option value="featured">Recommended</option>
+                <option value="rating">Highest Rated</option>
                 <option value="price-low">Price: Low to High</option>
                 <option value="price-high">Price: High to Low</option>
-              </select>
+              </select></label>
+              <ChevronDown size={15} className="catalog-select-chevron" />
             </div>
-            <div className="sort-filter-box">
-              <select aria-label="Filter by market" value={marketId} onChange={(e) => setMarketId(e.target.value)}>
+            <div className="sort-filter-box catalog-select-box">
+              <span className="catalog-select-icon"><MapPin size={17} /></span>
+              <label><small>Pickup market</small><select aria-label="Filter by market" value={marketId} onChange={(e) => setMarketId(e.target.value)}>
                 <option value="">All markets</option>
                 {markets.map((market) => <option key={market.id} value={market.id}>{market.name}</option>)}
-              </select>
+              </select></label>
+              <ChevronDown size={15} className="catalog-select-chevron" />
             </div>
-            <div className="sort-filter-box">
-              <select aria-label="Filter by market day" value={marketDay} onChange={(e) => setMarketDay(e.target.value)}>
+            <div className="sort-filter-box catalog-select-box">
+              <span className="catalog-select-icon"><CalendarDays size={17} /></span>
+              <label><small>Market day</small><select aria-label="Filter by market day" value={marketDay} onChange={(e) => setMarketDay(e.target.value)}>
                 <option value="">Any market day</option>
                 {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map((day) => <option value={day} key={day}>{day[0].toUpperCase() + day.slice(1)}</option>)}
-              </select>
+              </select></label>
+              <ChevronDown size={15} className="catalog-select-chevron" />
             </div>
 
             {/* Price Slider */}

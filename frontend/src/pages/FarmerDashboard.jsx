@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   AlertCircle,
   Eye,
+  EyeOff,
   Check,
   CalendarDays,
   Phone,
@@ -142,6 +143,18 @@ export default function FarmerDashboard() {
       setProfileSaved(true);
       setTimeout(() => setProfileSaved(false), 2000);
     } catch (error) { notify("Could not save profile", error.message); }
+  };
+
+  const toggleProductAvailability = async (product) => {
+    try {
+      await updateProduct(product.id, { isAvailable: !product.isAvailable });
+      notify(
+        product.isAvailable ? "Product marked unavailable" : "Product is available again",
+        product.isAvailable ? `${product.name} is hidden from customers.` : `${product.name} is live in the marketplace.`
+      );
+    } catch (error) {
+      notify("Could not update availability", error.message, "error");
+    }
   };
 
   const handleImageUpload = async (event) => {
@@ -470,6 +483,9 @@ export default function FarmerDashboard() {
                           </td>
                           <td data-label="Actions">
                             <div className="table-action-group">
+                              <button className={`btn-compact product-availability-toggle ${prod.isAvailable ? "available" : "unavailable"}`} type="button" onClick={() => toggleProductAvailability(prod)}>
+                                {prod.isAvailable ? <><EyeOff size={15} /> Mark unavailable</> : <><Eye size={15} /> Make available</>}
+                              </button>
                               <button className="btn-outline btn-compact" type="button" onClick={() => setEditingProduct(prod)}><Edit3 size={15} /> Edit</button>
                               <button
                                 className="btn-trash-icon"

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, Edit3, Megaphone, X } from "lucide-react";
+import { ArrowLeft, BellRing, Edit3, Megaphone, X } from "lucide-react";
 import AnimatedPage from "../components/AnimatedPage";
 import { ErrorState, LoadingState } from "../components/ui";
 import { useStore } from "../context/StoreContext";
 
 export default function AdminAnnouncements() {
-  const { adminListAnnouncements, adminCreateAnnouncement, adminUpdateAnnouncement, notify } = useStore();
+  const { adminListAnnouncements, adminCreateAnnouncement, adminUpdateAnnouncement, adminBroadcastNotification, notify } = useStore();
   const [items, setItems] = useState([]);
   const [form, setForm] = useState({ title: "", message: "", audience: "all", publishAt: "", expiresAt: "" });
   const [editingId, setEditingId] = useState("");
+  const [sendNotification, setSendNotification] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -42,9 +43,13 @@ export default function AdminAnnouncements() {
         active: true,
       };
       if (editingId) await adminUpdateAnnouncement(editingId, payload);
-      else await adminCreateAnnouncement(payload);
+      else {
+        await adminCreateAnnouncement(payload);
+        if (sendNotification) await adminBroadcastNotification({ title: form.title, message: form.message, audience: form.audience });
+      }
       setForm({ title: "", message: "", audience: "all", publishAt: "", expiresAt: "" });
       setEditingId("");
+      setSendNotification(true);
       await load();
       notify(editingId ? "Announcement updated" : "Announcement published");
     } catch (error) { notify("Could not save announcement", error.message); }
@@ -66,6 +71,7 @@ export default function AdminAnnouncements() {
         <div className="form-field-group"><label htmlFor="announcement-message">Message</label><textarea id="announcement-message" rows="4" value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} required /></div>
         <div className="form-field-group"><label htmlFor="announcement-audience">Audience</label><select id="announcement-audience" value={form.audience} onChange={(e) => setForm({ ...form, audience: e.target.value })}><option value="all">Everyone</option><option value="customer">Customers</option><option value="farmer">Farmers</option></select></div>
         <div className="form-two-cols"><div className="form-field-group"><label htmlFor="announcement-publish">Publish date (optional)</label><input id="announcement-publish" type="datetime-local" value={form.publishAt} onChange={(e) => setForm({ ...form, publishAt: e.target.value })} /></div><div className="form-field-group"><label htmlFor="announcement-expiry">Expiry (optional)</label><input id="announcement-expiry" type="datetime-local" value={form.expiresAt} onChange={(e) => setForm({ ...form, expiresAt: e.target.value })} /></div></div>
+        {!editingId && <label className="inline-checkbox"><input type="checkbox" checked={sendNotification} onChange={(event) => setSendNotification(event.target.checked)} /><BellRing size={16} /> Also send this as an in-app notification</label>}
         <button type="submit" className="btn-primary">{editingId ? "Save changes" : "Publish announcement"}</button>
       </form>
       <div className="dash-card"><h3>Announcement history</h3><div className="dash-stock-list">

@@ -13,6 +13,7 @@ const notificationRoutes = require('./routes/notificationRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const weeklyStockRoutes = require('./routes/weeklyStockRoutes');
 const aiRoutes = require('./routes/aiRoutes');
+const categoryRoutes = require('./routes/categoryRoutes');
 const notFound = require('./middleware/notFound');
 const errorHandler = require('./middleware/errorHandler');
 
@@ -55,6 +56,7 @@ app.use('/api/v1/notifications', notificationRoutes);
 app.use('/api/v1/announcements', announcementRoutes);
 app.use('/api/v1/weekly-stock', weeklyStockRoutes);
 app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/categories', categoryRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

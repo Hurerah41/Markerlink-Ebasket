@@ -3,11 +3,14 @@ const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const Review = require('../models/Review');
+const Category = require('../models/Category');
+const Notification = require('../models/Notification');
 const Favorite = require('../models/Favorite');
 const fs = require('fs/promises');
 const path = require('path');
 const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
+const { ensureDefaultCategories } = require('../utils/categoryMasterData');
 
 const marketFields = [
   'name',
@@ -138,6 +141,31 @@ const archiveProduct = asyncHandler(async (req, res) => {
   res.status(200).json({ success: true, message: 'Product archived by admin' });
 });
 
+const listProducts = asyncHandler(async (req, res) => {
+  const products = await Product.find()
+    .populate('farmer', 'name farmName email')
+    .populate('market', 'name address')
+    .sort({ createdAt: -1 });
+  res.json({ success: true, count: products.length, data: { products } });
+});
+
+const updateProductStatus = asyncHandler(async (req, res) => {
+  if (typeof req.body.isAvailable !== 'boolean') throw new AppError('Product availability must be true or false', 400);
+  const product = await Product.findByIdAndUpdate(req.params.id, { isAvailable: req.body.isAvailable }, { new: true, runValidators: true })
+    .populate('farmer', 'name farmName email').populate('market', 'name address');
+  if (!product) throw new AppError('Product not found', 404);
+  res.json({ success: true, message: req.body.isAvailable ? 'Product listing restored' : 'Product listing removed', data: { product } });
+});
+
+const listReviews = asyncHandler(async (req, res) => {
+  const reviews = await Review.find()
+    .populate('customer', 'name email')
+    .populate('farmer', 'name farmName')
+    .populate('product', 'name')
+    .sort({ createdAt: -1 });
+  res.json({ success: true, count: reviews.length, data: { reviews } });
+});
+
 const removeReview = asyncHandler(async (req, res) => {
   const review = await Review.findByIdAndUpdate(req.params.id, { status: 'removed' }, { new: true });
   if (!review) throw new AppError('Review not found', 404);
@@ -219,11 +247,50 @@ const getReport = asyncHandler(async (req, res) => {
     { $sort: { units: -1 } },
     { $limit: 5 },
   ]);
+  const [marketRevenueRows, activeFarmerRows] = await Promise.all([
+    Order.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$market', orderCount: { $sum: 1 }, revenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalAmount', 0] } } } },
+      { $sort: { revenue: -1, orderCount: -1 } },
+    ]),
+    Order.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: '$farmer', orderCount: { $sum: 1 }, completedOrders: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } }, revenue: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, '$totalAmount', 0] } }, units: { $sum: { $sum: '$items.quantity' } } } },
+      { $sort: { orderCount: -1, revenue: -1 } },
+      { $limit: 10 },
+    ]),
+  ]);
+  const [reportMarkets, reportFarmers] = await Promise.all([
+    Market.find({ _id: { $in: marketRevenueRows.map((item) => item._id) } }).select('name address').lean(),
+    User.find({ _id: { $in: activeFarmerRows.map((item) => item._id) } }).select('name farmName').lean(),
+  ]);
+  const marketMap = new Map(reportMarkets.map((market) => [String(market._id), market]));
+  const farmerMap = new Map(reportFarmers.map((farmer) => [String(farmer._id), farmer]));
+  const marketRevenue = marketRevenueRows.map((item) => ({ ...item, market: marketMap.get(String(item._id)) }));
+  const activeFarmers = activeFarmerRows.map((item) => ({ ...item, farmer: farmerMap.get(String(item._id)) }));
 
   res.status(200).json({
     success: true,
-    data: { report: { orderCount: orderStats?.orderCount || 0, revenue: orderStats?.revenue || 0, farmerCount, customerCount, marketCount, activeProductCount, pendingFarmerCount, bestSelling, recentOrders } },
+    data: { report: { orderCount: orderStats?.orderCount || 0, revenue: orderStats?.revenue || 0, farmerCount, customerCount, marketCount, activeProductCount, pendingFarmerCount, bestSelling, recentOrders, marketRevenue, activeFarmers } },
   });
+});
+
+const listCategories = asyncHandler(async (req, res) => {
+  await ensureDefaultCategories();
+  const categories = await Category.find().sort({ sortOrder: 1, name: 1 });
+  res.json({ success: true, count: categories.length, data: { categories } });
+});
+
+const broadcastNotification = asyncHandler(async (req, res) => {
+  const title = String(req.body.title || '').trim();
+  const message = String(req.body.message || '').trim();
+  const audience = req.body.audience || 'all';
+  if (!title || !message) throw new AppError('Notification title and message are required', 400);
+  if (!['all', 'customer', 'farmer', 'admin'].includes(audience)) throw new AppError('Invalid notification audience', 400);
+  const recipients = await User.find({ accountStatus: 'active', ...(audience === 'all' ? {} : { role: audience }) }).select('_id');
+  const batchKey = `broadcast:${Date.now()}`;
+  if (recipients.length) await Notification.insertMany(recipients.map((recipient) => ({ user: recipient._id, type: 'announcement', title, message, eventKey: `${batchKey}:${recipient._id}` })));
+  res.status(201).json({ success: true, message: `Notification sent to ${recipients.length} users`, data: { recipientCount: recipients.length } });
 });
 
 const deleteMarket = asyncHandler(async (req, res) => {
@@ -277,7 +344,10 @@ module.exports = {
   deleteCustomer,
   updateCustomerStatus,
   archiveProduct,
+  listProducts,
+  updateProductStatus,
   removeReview,
+  listReviews,
   updateFarmer,
   updateFarmerStatus,
   createMarket,
@@ -287,5 +357,7 @@ module.exports = {
   deleteMarket,
   listOrders,
   getReport,
+  listCategories,
+  broadcastNotification,
 };
 

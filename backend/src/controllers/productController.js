@@ -7,6 +7,8 @@ const AppError = require('../utils/AppError');
 const asyncHandler = require('../utils/asyncHandler');
 const Favorite = require('../models/Favorite');
 const { createNotification } = require('../utils/notifications');
+const Category = require('../models/Category');
+const { ensureDefaultCategories } = require('../utils/categoryMasterData');
 
 const productFields = [
   'market',
@@ -20,7 +22,6 @@ const productFields = [
   'imageUrl',
   'isAvailable',
 ];
-const CATEGORIES = ['vegetables', 'fruits', 'dairy', 'baked-goods', 'other'];
 
 const removeStoredProductImage = async (imageUrl) => {
   if (!imageUrl?.startsWith('/uploads/products/')) return;
@@ -42,12 +43,14 @@ const ensureActiveMarket = async (marketId) => {
   if (!market) throw new AppError('An active market is required', 400);
 };
 
-const validateProductInput = (source, { partial = false } = {}) => {
+const validateProductInput = async (source, { partial = false } = {}) => {
   if (!partial || source.name !== undefined) {
     if (!String(source.name || '').trim()) throw new AppError('Product name is required', 400);
   }
   if (!partial || source.category !== undefined) {
-    if (!CATEGORIES.includes(String(source.category || '').toLowerCase())) throw new AppError(`Category must be one of: ${CATEGORIES.join(', ')}`, 400);
+    await ensureDefaultCategories();
+    const category = await Category.findOne({ slug: String(source.category || '').toLowerCase(), isActive: true }).select('_id');
+    if (!category) throw new AppError('Choose an active product category', 400);
   }
   if (!partial || source.unit !== undefined) {
     if (!['kg', 'gram', 'piece', 'dozen', 'bunch', 'box', 'litre'].includes(source.unit)) throw new AppError('Invalid product unit', 400);
@@ -119,7 +122,7 @@ const getMyProducts = asyncHandler(async (req, res) => {
 
 const createProduct = asyncHandler(async (req, res) => {
   await ensureActiveMarket(req.body.market);
-  validateProductInput(req.body);
+  await validateProductInput(req.body);
 
   const data = pick(req.body, productFields);
   data.farmer = req.user._id;
@@ -137,7 +140,7 @@ const updateProduct = asyncHandler(async (req, res) => {
   if (!existing) throw new AppError('Product not found or not owned by you', 404);
 
   if (req.body.market) await ensureActiveMarket(req.body.market);
-  validateProductInput(req.body, { partial: true });
+  await validateProductInput(req.body, { partial: true });
 
   const wasOutOfStock = existing.quantity === 0;
   Object.assign(existing, pick(req.body, productFields));

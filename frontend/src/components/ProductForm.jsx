@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ImagePlus, PackageOpen, Plus, Save, Trash2, Upload, X } from "lucide-react";
-import { categories } from "../data";
+import { categories as fallbackCategories } from "../data";
+import { useStore } from "../context/StoreContext";
 
 const units = ["kg", "gram", "piece", "dozen", "bunch", "box", "litre"];
 
@@ -31,6 +32,8 @@ export default function ProductForm({
   onCancel,
   submitLabel,
 }) {
+  const { categories: liveCategories = [] } = useStore();
+  const categories = liveCategories.length ? liveCategories : fallbackCategories;
   const initialValues = useMemo(() => product ? {
     name: product.name || "",
     category: product.category || "vegetables",
@@ -143,7 +146,7 @@ export default function ProductForm({
         <div className="form-field-group">
           <label htmlFor={`${mode}-product-category`}>Category</label>
           <select id={`${mode}-product-category`} value={form.category} onChange={change("category")}>
-            {categories.map((category) => <option key={category.slug} value={category.slug}>{category.icon} {category.name}</option>)}
+            {categories.map((category) => <option key={category.slug} value={category.slug}>{category.name}</option>)}
           </select>
         </div>
       </div>

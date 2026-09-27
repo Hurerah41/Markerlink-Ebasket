@@ -37,7 +37,7 @@ export function normalizeFarmer(farmer) {
     name: farmer.farmName || farmer.name || "Local Farmer",
     owner: farmer.name || "",
     location: farmer.location || "Local market",
-    badge: farmer.accountStatus === "active" ? "Verified Local Producer" : farmer.accountStatus || "Pending approval",
+    badge: farmer.accountStatus === "pending" ? "Pending approval" : farmer.accountStatus === "suspended" ? "Suspended" : "Verified Local Producer",
     rating: Number(farmer.rating ?? 0),
     reviewsCount: Number(farmer.reviewsCount ?? 0),
     productsCount: Number(farmer.productsCount ?? 0),

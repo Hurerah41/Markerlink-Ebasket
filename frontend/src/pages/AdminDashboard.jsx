@@ -18,7 +18,14 @@ import {
   LocateFixed,
   ChevronRight,
   Megaphone,
-  Upload
+  Upload,
+  PackageSearch,
+  Tags,
+  Search,
+  Boxes,
+  Eye,
+  EyeOff,
+  FileDown
 } from "lucide-react";
 import AnimatedPage from "../components/AnimatedPage";
 import { Badge } from "../components/ui";
@@ -42,7 +49,7 @@ const normalizeAdminCustomer = (customer) => ({
 });
 
 export default function AdminDashboard() {
-  const { farmers, markets, orders, reviews, products, currentUser, adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminUploadMarketImage, adminRemoveMarketImage, adminDeleteMarket, adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview, notify } = useStore();
+  const { farmers, markets, orders, products, currentUser, refreshCatalog, adminListFarmers, adminUpdateFarmer, adminUpdateFarmerStatus, adminCreateMarket, adminUpdateMarket, adminUploadMarketImage, adminRemoveMarketImage, adminDeleteMarket, adminListCustomers, adminCreateCustomer, adminUpdateCustomer, adminDeleteCustomer, adminUpdateCustomerStatus, adminGetReport, adminRemoveReview, adminListProducts, adminUpdateProductStatus, adminListReviews, adminListCategories, adminCreateCategory, adminUpdateCategory, adminArchiveCategory, notify } = useStore();
   const [activeTab, setActiveTab] = useState("dashboard"); // dashboard, farmers, customers, markets, orders, moderation
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
@@ -50,7 +57,14 @@ export default function AdminDashboard() {
   const [customerList, setCustomerList] = useState([]);
   const [report, setReport] = useState(null);
   const [marketList, setMarketList] = useState(markets);
-  const [reviewList, setReviewList] = useState(reviews);
+  const [reviewList, setReviewList] = useState([]);
+  const [moderationProducts, setModerationProducts] = useState([]);
+  const [moderationView, setModerationView] = useState("products");
+  const [moderationSearch, setModerationSearch] = useState("");
+  const [moderationStatus, setModerationStatus] = useState("all");
+  const [categoryList, setCategoryList] = useState([]);
+  const [categoryForm, setCategoryForm] = useState({ name: "", slug: "", icon: "basket", sortOrder: "0" });
+  const [editingCategoryId, setEditingCategoryId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerStatusFilter, setCustomerStatusFilter] = useState("all");
 
@@ -63,9 +77,10 @@ export default function AdminDashboard() {
     adminListFarmers().then(setFarmerList).catch((error) => notify("Could not load admin farmer list", error.message));
     adminListCustomers().then((customers) => setCustomerList(customers.map(normalizeAdminCustomer))).catch((error) => notify("Could not load customer list", error.message));
     adminGetReport().then(setReport).catch((error) => notify("Could not load platform report", error.message));
+    adminListProducts().then(setModerationProducts).catch((error) => notify("Could not load product moderation", error.message));
+    adminListReviews().then(setReviewList).catch((error) => notify("Could not load review moderation", error.message));
+    adminListCategories().then(setCategoryList).catch((error) => notify("Could not load categories", error.message));
   }, [currentUser.role]);
-
-  useEffect(() => { setReviewList(reviews); }, [reviews]);
 
   // Form visibility + edit-target state, one set per section
   const [farmerForm, setFarmerForm] = useState(null); // null = hidden, {...fields} = shown
@@ -85,6 +100,15 @@ export default function AdminDashboard() {
     const query = customerSearch.trim().toLowerCase();
     const matchesQuery = !query || [customer.name, customer.email, customer.area, customer.preferredMarket].some((value) => String(value || "").toLowerCase().includes(query));
     return matchesQuery && (customerStatusFilter === "all" || customer.status.toLowerCase() === customerStatusFilter);
+  });
+  const visibleModerationProducts = moderationProducts.filter((product) => {
+    const query = moderationSearch.trim().toLowerCase();
+    const matchesSearch = !query || [product.name, product.farmer, product.market, product.category]
+      .some((value) => String(value || "").toLowerCase().includes(query));
+    const matchesStatus = moderationStatus === "all"
+      || (moderationStatus === "live" && product.isAvailable)
+      || (moderationStatus === "removed" && !product.isAvailable);
+    return matchesSearch && matchesStatus;
   });
 
   /* ---------------- FARMERS ---------------- */
@@ -258,6 +282,87 @@ export default function AdminDashboard() {
     } catch (error) { notify("Could not remove review", error.message); }
   };
 
+  const setProductAvailability = async (product, isAvailable) => {
+    try {
+      const updated = await adminUpdateProductStatus(product.id, isAvailable);
+      setModerationProducts((current) => current.map((item) => item.id === product.id ? updated : item));
+      notify(isAvailable ? "Product restored" : "Product removed", `${product.name} moderation status was updated`);
+    } catch (error) { notify("Could not update product", error.message); }
+  };
+
+  const generatePlatformReport = () => {
+    if (!report) return notify("Report is still loading", "Please try again in a moment", "error");
+    const safeCell = (value) => {
+      const text = String(value ?? "");
+      const protectedText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+      return `"${protectedText.replace(/"/g, '""')}"`;
+    };
+    const rows = [
+      ["MarketLink Platform Report"],
+      ["Generated", new Date().toLocaleString()],
+      [],
+      ["Platform summary"],
+      ["Metric", "Value"],
+      ["Total orders", report.orderCount],
+      ["Completed revenue (Rs.)", report.revenue],
+      ["Registered farmers", report.farmerCount],
+      ["Pending farmers", report.pendingFarmerCount],
+      ["Active customers", report.customerCount],
+      ["Active markets", report.marketCount],
+      ["Live products", report.activeProductCount],
+      [],
+      ["Revenue by market"],
+      ["Market", "Orders", "Completed revenue (Rs.)"],
+      ...(report.marketRevenue || []).map((item) => [item.market?.name || "Market", item.orderCount, item.revenue]),
+      [],
+      ["Most active farmers"],
+      ["Farmer", "Orders", "Completed orders", "Units", "Revenue (Rs.)"],
+      ...(report.activeFarmers || []).map((item) => [item.farmer?.farmName || item.farmer?.name || "Farmer", item.orderCount, item.completedOrders, item.units, item.revenue]),
+      [],
+      ["Best-selling products"],
+      ["Product", "Units sold"],
+      ...(report.bestSelling || []).map((item) => [item.name, item.units]),
+    ];
+    const csv = rows.map((row) => row.map(safeCell).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `marketlink-platform-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    notify("Report generated", "The CSV report was downloaded successfully");
+  };
+
+  const saveCategory = async (event) => {
+    event.preventDefault();
+    try {
+      if (editingCategoryId) await adminUpdateCategory(editingCategoryId, { ...categoryForm, sortOrder: Number(categoryForm.sortOrder) });
+      else await adminCreateCategory({ ...categoryForm, sortOrder: Number(categoryForm.sortOrder) });
+      setCategoryList(await adminListCategories());
+      await refreshCatalog(currentUser);
+      setCategoryForm({ name: "", slug: "", icon: "basket", sortOrder: "0" });
+      setEditingCategoryId("");
+      notify(editingCategoryId ? "Category updated" : "Category created");
+    } catch (error) { notify("Could not save category", error.message); }
+  };
+
+  const editCategory = (category) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({ name: category.name, slug: category.slug, icon: category.icon || "basket", sortOrder: String(category.sortOrder || 0) });
+  };
+
+  const toggleCategory = async (category) => {
+    try {
+      if (category.isActive) await adminArchiveCategory(category.id);
+      else await adminUpdateCategory(category.id, { isActive: true });
+      setCategoryList(await adminListCategories());
+      await refreshCatalog(currentUser);
+      notify(category.isActive ? "Category archived" : "Category restored");
+    } catch (error) { notify("Could not update category", error.message); }
+  };
+
   return (
     <AnimatedPage>
       <section className="dashboard-section">
@@ -308,7 +413,11 @@ export default function AdminDashboard() {
 
               <button className={`farmer-nav-link ${activeTab === "moderation" ? "active" : ""}`} onClick={() => setActiveTab("moderation")}>
                 <ShieldCheck size={18} />
-                <span>Review Moderation</span>
+                <span>Content Moderation</span>
+              </button>
+              <button className={`farmer-nav-link ${activeTab === "categories" ? "active" : ""}`} onClick={() => setActiveTab("categories")}>
+                <Tags size={18} />
+                <span>Product Categories</span>
               </button>
               <Link className="farmer-nav-link" to="/admin/announcements">
                 <Megaphone size={18} />
@@ -336,6 +445,9 @@ export default function AdminDashboard() {
                     <h1 className="dash-title">Welcome, {currentUser.name.split(" ")[0]} <ShieldCheck size={25} aria-hidden="true" /></h1>
                     <p className="dash-subtitle">Platform-wide snapshot of farmers, customers, markets and orders.</p>
                   </div>
+                  <button type="button" className="btn-primary admin-report-download" onClick={generatePlatformReport} disabled={!report}>
+                    <FileDown size={17} /> Generate CSV Report
+                  </button>
                 </div>
 
                 <div className="metrics-cards-grid">
@@ -347,7 +459,6 @@ export default function AdminDashboard() {
                       <span className="metric-trend trend-up">Across {marketList.length} markets</span>
                     </div>
                   </div>
-
                   <div className="metric-box">
                     <div className="metric-icon-wrap icon-amber"><Users size={20} /></div>
                     <div className="metric-data">
@@ -404,25 +515,33 @@ export default function AdminDashboard() {
                   <div className="dash-card">
                     <div className="dash-card-header">
                       <div>
-                        <h3>Top Farmers</h3>
-                        <small>By rating across the platform</small>
+                        <h3>Most Active Farmers</h3>
+                        <small>Ranked by non-cancelled customer orders</small>
                       </div>
                       <button className="link-btn-small" onClick={() => setActiveTab("farmers")}>Manage All</button>
                     </div>
                     <div className="dash-stock-list">
-                      {farmerList.slice(0, 5).map((f) => (
-                        <div className="dash-stock-item" key={f.id}>
-                          <img src={f.image} alt={f.name} />
+                      {(report?.activeFarmers || []).slice(0, 5).map((item) => (
+                        <div className="dash-stock-item" key={item._id}>
                           <div className="stock-info">
-                            <strong>{f.name}</strong>
-                            <small>{f.location}</small>
+                            <strong>{item.farmer?.farmName || item.farmer?.name || "Farmer"}</strong>
+                            <small>{item.orderCount} orders · {item.completedOrders} completed · {item.units} units</small>
                           </div>
                           <div className="stock-level-pill">
-                            <strong>★ {f.rating}</strong>
-                            <span className="tag-in-stock">{f.badge}</span>
+                            <strong>Rs. {Number(item.revenue || 0).toLocaleString()}</strong>
+                            <span className="tag-in-stock">Active</span>
                           </div>
                         </div>
                       ))}
+                      {!report?.activeFarmers?.length && <p className="muted-text">Farmer activity will appear after orders are placed.</p>}
+                    </div>
+                  </div>
+
+                  <div className="dash-card">
+                    <div className="dash-card-header"><div><h3>Revenue by Market</h3><small>Completed-order revenue and total order activity</small></div></div>
+                    <div className="dash-stock-list">
+                      {(report?.marketRevenue || []).map((item) => <div className="dash-stock-item" key={item._id}><div className="stock-info"><strong>{item.market?.name || "Market"}</strong><small>{item.orderCount} total orders</small></div><div className="stock-level-pill"><strong>Rs. {Number(item.revenue || 0).toLocaleString()}</strong><span className="tag-in-stock">Revenue</span></div></div>)}
+                      {!report?.marketRevenue?.length && <p className="muted-text">Market revenue will appear after completed orders.</p>}
                     </div>
                   </div>
                 </div>
@@ -438,7 +557,6 @@ export default function AdminDashboard() {
                     <h1 className="dash-title">Farmers ({farmerList.length})</h1>
                     <p className="dash-subtitle">Add new farm stalls, edit existing ones, or remove them from the platform.</p>
                   </div>
-                  <span className="status-simulate-pill"><ShieldCheck size={15} /> Approval is database-backed</span>
                 </div>
 
                 {farmerForm && (
@@ -816,19 +934,78 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* 6. REVIEW MODERATION */}
+            {/* 6. CATEGORY MASTER DATA */}
+            {activeTab === "categories" && (
+              <div>
+                <div className="dash-top-header"><div><span className="eyebrow">System Configuration</span><h1 className="dash-title">Product Categories ({categoryList.length})</h1><p className="dash-subtitle">Manage the live categories available to farmers and customers.</p></div></div>
+                <div className="dash-panels-two-col">
+                  <form className="dash-card profile-edit-form" onSubmit={saveCategory}>
+                    <div className="card-heading-row"><h3><Tags size={18} /> {editingCategoryId ? "Edit category" : "Add category"}</h3>{editingCategoryId && <button type="button" className="btn-outline btn-compact" onClick={() => { setEditingCategoryId(""); setCategoryForm({ name: "", slug: "", icon: "basket", sortOrder: "0" }); }}><X size={14} /> Cancel</button>}</div>
+                    <div className="form-field-group"><label>Category name</label><input value={categoryForm.name} onChange={(event) => setCategoryForm({ ...categoryForm, name: event.target.value })} required maxLength={60} /></div>
+                    <div className="form-two-cols"><div className="form-field-group"><label>Slug</label><input value={categoryForm.slug} onChange={(event) => setCategoryForm({ ...categoryForm, slug: event.target.value })} placeholder="Generated from name" /></div><div className="form-field-group"><label>Display order</label><input type="number" min="0" value={categoryForm.sortOrder} onChange={(event) => setCategoryForm({ ...categoryForm, sortOrder: event.target.value })} /></div></div>
+                    <div className="form-field-group"><label>Icon type</label><select value={categoryForm.icon} onChange={(event) => setCategoryForm({ ...categoryForm, icon: event.target.value })}><option value="vegetables">Vegetables</option><option value="fruits">Fruits</option><option value="dairy">Dairy</option><option value="bakery">Bakery</option><option value="basket">General basket</option></select></div>
+                    <button type="submit" className="btn-primary"><Plus size={16} /> {editingCategoryId ? "Save category" : "Create category"}</button>
+                  </form>
+                  <div className="dash-card"><h3>Category master list</h3><div className="dash-stock-list">{categoryList.map((category) => <div className="dash-stock-item" key={category.id}><div className="stock-info"><strong>{category.name}</strong><small>{category.slug} · order {category.sortOrder || 0}</small></div><div className="table-action-group"><Badge tone={category.isActive ? "success" : "neutral"}>{category.isActive ? "Active" : "Archived"}</Badge><button type="button" className="btn-outline btn-compact" onClick={() => editCategory(category)}><Edit3 size={14} /> Edit</button><button type="button" className="btn-outline btn-compact" onClick={() => toggleCategory(category)}>{category.isActive ? "Archive" : "Restore"}</button></div></div>)}{!categoryList.length && <p>No categories configured.</p>}</div></div>
+                </div>
+              </div>
+            )}
+
+            {/* 7. CONTENT MODERATION */}
             {activeTab === "moderation" && (
               <div>
                 <div className="dash-top-header">
                   <div>
                     <span className="eyebrow">Content Moderation</span>
-                    <h1 className="dash-title">Customer Reviews ({reviewList.length})</h1>
-                    <p className="dash-subtitle">Remove reviews that violate community guidelines.</p>
+                    <h1 className="dash-title">Products & Reviews</h1>
+                    <p className="dash-subtitle">Remove inappropriate listings or customer reviews and restore content when needed.</p>
                   </div>
                 </div>
+                <div className="moderation-switch"><button type="button" className={moderationView === "products" ? "active" : ""} onClick={() => setModerationView("products")}><PackageSearch size={16} /> Product listings ({moderationProducts.length})</button><button type="button" className={moderationView === "reviews" ? "active" : ""} onClick={() => setModerationView("reviews")}><ShieldCheck size={16} /> Customer reviews ({reviewList.length})</button></div>
 
-                <div className="reviews-cards-grid">
-                  {reviewList.map((rev) => (
+                {moderationView === "products" && (
+                  <section className="moderation-product-panel" aria-label="Product listing moderation">
+                    <div className="moderation-product-toolbar">
+                      <div className="moderation-summary">
+                        <span className="moderation-summary-icon"><Boxes size={20} /></span>
+                        <div><strong>{moderationProducts.length} listings</strong><small>{moderationProducts.filter((item) => item.isAvailable).length} live · {moderationProducts.filter((item) => !item.isAvailable).length} removed</small></div>
+                      </div>
+                      <div className="moderation-controls">
+                        <label className="moderation-search" htmlFor="moderation-product-search">
+                          <Search size={16} />
+                          <input id="moderation-product-search" value={moderationSearch} onChange={(event) => setModerationSearch(event.target.value)} placeholder="Search product, farmer or market" />
+                        </label>
+                        <select aria-label="Filter listings by status" value={moderationStatus} onChange={(event) => setModerationStatus(event.target.value)}>
+                          <option value="all">All listings</option>
+                          <option value="live">Live only</option>
+                          <option value="removed">Removed only</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="moderation-table-shell">
+                      <table className="moderation-product-table">
+                        <thead><tr><th>Product listing</th><th>Seller & pickup</th><th>Category</th><th>Inventory</th><th>Visibility</th><th><span className="sr-only">Moderation action</span></th></tr></thead>
+                        <tbody>
+                          {visibleModerationProducts.map((product) => (
+                            <tr key={product.id} className={!product.isAvailable ? "is-removed" : ""}>
+                              <td data-label="Product listing"><div className="admin-product-cell"><img src={product.image} alt="" /><div><strong>{product.name}</strong><small>Rs. {Number(product.price || 0).toLocaleString()} / {product.unit}</small></div></div></td>
+                              <td data-label="Seller & pickup"><div className="moderation-location"><strong>{product.farmer}</strong><small><MapPin size={12} /> {product.market}</small></div></td>
+                              <td data-label="Category"><span className="moderation-category">{product.category}</span></td>
+                              <td data-label="Inventory"><div className="moderation-stock"><strong>{product.stock}</strong><small>{product.unit} available</small></div></td>
+                              <td data-label="Visibility"><Badge tone={product.isAvailable ? "success" : "neutral"}>{product.isAvailable ? <><Eye size={12} /> Live</> : <><EyeOff size={12} /> Removed</>}</Badge></td>
+                              <td data-label="Action" className="moderation-action-cell"><button type="button" className={`moderation-action ${product.isAvailable ? "remove" : "restore"}`} onClick={() => setProductAvailability(product, !product.isAvailable)}>{product.isAvailable ? <><EyeOff size={15} /> Remove listing</> : <><Eye size={15} /> Restore listing</>}</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      {!visibleModerationProducts.length && <div className="moderation-empty"><PackageSearch size={25} /><strong>No matching listings</strong><span>Try changing the search or status filter.</span></div>}
+                    </div>
+                  </section>
+                )}
+
+                {moderationView === "reviews" && <div className="reviews-cards-grid">
+                  {reviewList.filter((review) => review.status !== "removed").map((rev) => (
                     <div className="customer-review-card" key={rev.id}>
                       <div className="rev-head">
                         <div className="rev-author-info">
@@ -841,17 +1018,18 @@ export default function AdminDashboard() {
                         <div className="rev-stars">{"★".repeat(Math.round(rev.rating))}</div>
                       </div>
                       <p className="rev-body">"{rev.comment}"</p>
+                      <small>{rev.product?.name || "Product review"}</small>
                       <button className="link-btn-small" onClick={() => removeReview(rev.id)}>
                         <AlertTriangle size={14} /> Remove Review
                       </button>
                     </div>
                   ))}
-                  {reviewList.length === 0 && (
+                  {reviewList.filter((review) => review.status !== "removed").length === 0 && (
                     <div className="dash-card">
                       <CheckCircle2 size={18} /> No reviews left to moderate.
                     </div>
                   )}
-                </div>
+                </div>}
               </div>
             )}
           </main>

@@ -5,6 +5,7 @@ const aiRateLimit = require('../middleware/aiRateLimit');
 
 const router = express.Router();
 
-router.post('/chat', protect, aiRateLimit, chat);
+// protect.optional allows both logged-in users (with role context) and guest visitors to chat
+router.post('/chat', protect.optional, aiRateLimit, chat);
 
 module.exports = router;
